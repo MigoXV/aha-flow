@@ -57,14 +57,17 @@ jobs:
       - name: Configure
         run: cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       - name: Build
+        id: windows-build
         run: cmake --build build/windows --config Release --parallel 2
       - name: Test without the LAN engine
         run: ctest --test-dir build/windows -C Release --output-on-failure
       - name: Check native Windows fonts and DPI
+        if: always() && steps.windows-build.outcome == 'success'
         shell: pwsh
         run: |
           $env:QT_QPA_PLATFORM = 'windows'
           $env:QT_LOGGING_RULES = 'qt.qpa.fonts.debug=true'
+          $failedChecks = 0
           foreach ($scale in @('1', '1.25', '2')) {
             $env:QT_SCALE_FACTOR = $scale
             $directory = Join-Path $env:GITHUB_WORKSPACE "build/windows/ui-screenshots/$scale"
@@ -73,14 +76,17 @@ jobs:
             & ./build/windows/tests/Release/aha_ui_tests.exe fontsSurviveStylingAndDpi compactSettingsAndTranscript -o "$directory/test-results.txt,txt" 2> "$directory/font-engine.log"
             if ($LASTEXITCODE -ne 0) {
               Get-Content "$directory/test-results.txt"
-              throw "Native Windows UI check failed at scale $scale"
+              $failedChecks += 1
             }
           }
+          if ($failedChecks -gt 0) { throw "$failedChecks native Windows UI checks failed" }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: aha-flow-windows-ui-checks
-          path: build/windows/ui-screenshots/
+          path: |
+            build/windows/ui-screenshots/
+            build/windows/Testing/Temporary/LastTest.log
           if-no-files-found: warn
       - name: Package with Qt runtime
         working-directory: build/windows
