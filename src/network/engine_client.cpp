@@ -1,4 +1,5 @@
 #include "network/engine_client.h"
+#include "network/proxy.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -7,14 +8,18 @@
 #include <QNetworkRequest>
 #include <QSslError>
 #include <QTimer>
+#include <stdexcept>
 
-namespace aha {
-namespace {
+namespace aha
+{
+namespace
+{
 constexpr qint64 maxResponseBytes = 1024 * 1024;
 }
 
 EngineClient::EngineClient(QObject *parent) : QObject(parent)
 {
+    network_.setParent(this);
 }
 
 void EngineClient::fetchModels(const EngineConfig &config)
@@ -39,6 +44,12 @@ void EngineClient::fetchModels(const EngineConfig &config)
         request.setRawHeader("Authorization", "Bearer " + config.apiKey.trimmed().toUtf8());
     }
 
+    try {
+        network_.setProxy(engineProxy(url));
+    } catch (const std::exception &error) {
+        emit requestFailed(QString::fromUtf8(error.what()));
+        return;
+    }
     QNetworkReply *reply = network_.get(request);
     activeReply_ = reply;
     reply->setReadBufferSize(maxResponseBytes + 1);
@@ -88,8 +99,8 @@ void EngineClient::fetchModels(const EngineConfig &config)
 
         QJsonParseError parseError;
         const QJsonDocument document = QJsonDocument::fromJson(reply->readAll(), &parseError);
-        if (parseError.error != QJsonParseError::NoError || !document.isObject()
-            || !document.object().value(QStringLiteral("data")).isArray()) {
+        if (parseError.error != QJsonParseError::NoError || !document.isObject() ||
+            !document.object().value(QStringLiteral("data")).isArray()) {
             emit requestFailed(QStringLiteral("模型列表接口返回格式无效。"));
             return;
         }

@@ -3,10 +3,11 @@
 #include <QTest>
 #include <QUrlQuery>
 
-class EngineConfigTest final : public QObject {
+class EngineConfigTest final : public QObject
+{
     Q_OBJECT
 
-private slots:
+  private slots:
     void buildsTranscriptionSession()
     {
         aha::EngineConfig config;
@@ -37,11 +38,21 @@ private slots:
         QVERIFY(!QUrlQuery(config.realtimeUrl()).hasQueryItem(QStringLiteral("x_aha")));
     }
 
+    void acceptsOriginalAddressForms()
+    {
+        aha::EngineConfig config;
+        config.baseUrl = QStringLiteral("192.168.0.222:10000");
+        QCOMPARE(config.modelsUrl(), QUrl(QStringLiteral("https://192.168.0.222:10000/v1/models")));
+        config.baseUrl = QStringLiteral("ws://localhost:10000/v1/realtime?intent=transcription");
+        QCOMPARE(config.modelsUrl(), QUrl(QStringLiteral("http://localhost:10000/v1/models")));
+        config.baseUrl = QStringLiteral("wss://localhost:10000");
+        QCOMPARE(config.modelsUrl().scheme(), QStringLiteral("https"));
+    }
+
     void rejectsInvalidEndpoints_data()
     {
         QTest::addColumn<QString>("address");
         QTest::newRow("empty") << QString();
-        QTest::newRow("no-scheme") << QStringLiteral("localhost:10000");
         QTest::newRow("file") << QStringLiteral("file:///tmp/socket");
         QTest::newRow("no-host") << QStringLiteral("https://");
         QTest::newRow("userinfo") << QStringLiteral("https://user:password@localhost");

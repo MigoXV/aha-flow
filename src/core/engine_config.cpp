@@ -2,13 +2,23 @@
 
 #include <QUrlQuery>
 
-namespace aha {
+namespace aha
+{
 
 QUrl EngineConfig::serviceUrl(const QString &path) const
 {
-    QUrl url(baseUrl.trimmed(), QUrl::StrictMode);
-    if (!url.isValid() || url.host().isEmpty() || !url.userInfo().isEmpty()
-        || (url.scheme() != QStringLiteral("http") && url.scheme() != QStringLiteral("https"))) {
+    QString address = baseUrl.trimmed();
+    if (address.isEmpty())
+        return {};
+    if (!address.contains(QStringLiteral("://")))
+        address.prepend(QStringLiteral("https://"));
+    QUrl url(address, QUrl::StrictMode);
+    if (url.scheme() == QStringLiteral("ws"))
+        url.setScheme(QStringLiteral("http"));
+    else if (url.scheme() == QStringLiteral("wss"))
+        url.setScheme(QStringLiteral("https"));
+    if (!url.isValid() || url.host().isEmpty() || !url.userInfo().isEmpty() ||
+        (url.scheme() != QStringLiteral("http") && url.scheme() != QStringLiteral("https"))) {
         return {};
     }
     url.setPath(path);

@@ -1,0 +1,100 @@
+[
+  {
+    "atMs": 1354,
+    "type": "x_aha.vad.physical_speech_started",
+    "audio_start_ms": 810
+  },
+  {
+    "atMs": 1355,
+    "type": "input_audio_buffer.speech_started",
+    "item_id": "turn-1",
+    "audio_start_ms": 810
+  },
+  {
+    "atMs": 7958,
+    "type": "x_aha.vad.physical_speech_stopped",
+    "item_id": "turn-1",
+    "audio_start_ms": 810,
+    "audio_end_ms": 7860
+  },
+  {
+    "atMs": 7970,
+    "type": "x_aha.vad.turn_completed",
+    "item_id": "turn-1",
+    "audio_start_ms": 810,
+    "audio_end_ms": 7860
+  },
+  {
+    "atMs": 7970,
+    "type": "input_audio_buffer.speech_stopped",
+    "item_id": "turn-1",
+    "audio_end_ms": 7860
+  },
+  {
+    "atMs": 8197,
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "turn-1"
+  },
+  {
+    "atMs": 10556,
+    "type": "x_aha.vad.physical_speech_started",
+    "audio_start_ms": 9990
+  },
+  {
+    "atMs": 10557,
+    "type": "input_audio_buffer.speech_started",
+    "item_id": "turn-2",
+    "audio_start_ms": 9990
+  },
+  {
+    "atMs": 11654,
+    "type": "x_aha.vad.physical_speech_stopped",
+    "item_id": "turn-2",
+    "audio_start_ms": 9990,
+    "audio_end_ms": 11550
+  },
+  {
+    "atMs": 14656,
+    "type": "x_aha.vad.physical_speech_started",
+    "item_id": "turn-2",
+    "audio_start_ms": 14110
+  },
+  {
+    "atMs": 15955,
+    "type": "x_aha.vad.physical_speech_stopped",
+    "item_id": "turn-2",
+    "audio_start_ms": 14110,
+    "audio_end_ms": 15870
+  },
+  {
+    "atMs": 19055,
+    "type": "x_aha.vad.physical_speech_started",
+    "item_id": "turn-2",
+    "audio_start_ms": 18510
+  },
+  {
+    "atMs": 20357,
+    "type": "x_aha.vad.physical_speech_stopped",
+    "item_id": "turn-2",
+    "audio_start_ms": 18510,
+    "audio_end_ms": 20290
+  },
+  {
+    "atMs": 20369,
+    "type": "x_aha.vad.turn_completed",
+    "item_id": "turn-2",
+    "audio_start_ms": 9990,
+    "audio_end_ms": 20290
+  },
+  {
+    "atMs": 20370,
+    "type": "input_audio_buffer.speech_stopped",
+    "item_id": "turn-2",
+    "audio_end_ms": 20290
+  },
+  {
+    "atMs": 20494,
+    "type": "conversation.item.input_audio_transcription.completed",
+    "item_id": "turn-2"
+  }
+]

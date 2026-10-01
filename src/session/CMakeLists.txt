@@ -1,0 +1,2 @@
+add_library(aha_session STATIC session_controller.cpp session_controller.h)
+target_link_libraries(aha_session PUBLIC aha_network aha_audio aha_storage PRIVATE aha_options)

@@ -5,16 +5,18 @@
 #include <QTcpSocket>
 #include <QTest>
 
-class EngineClientTest final : public QObject {
+class EngineClientTest final : public QObject
+{
     Q_OBJECT
 
-private slots:
+  private slots:
     void handlesHttpResponses_data()
     {
         QTest::addColumn<QByteArray>("body");
         QTest::addColumn<int>("status");
         QTest::addColumn<bool>("success");
-        QTest::newRow("models") << QByteArray(R"({"data":[{"id":"default-audio"},{"id":"default-audio"},{"id":null}]})") << 200 << true;
+        QTest::newRow("models") << QByteArray(R"({"data":[{"id":"default-audio"},{"id":"default-audio"},{"id":null}]})")
+                                << 200 << true;
         QTest::newRow("empty-list") << QByteArray(R"({"data":[]})") << 200 << true;
         QTest::newRow("invalid-json") << QByteArray("not json") << 200 << false;
         QTest::newRow("invalid-schema") << QByteArray(R"({"models":[]})") << 200 << false;
@@ -39,8 +41,9 @@ private slots:
                 if (!received.contains("\r\n\r\n")) {
                     return;
                 }
-                socket->write("HTTP/1.1 " + QByteArray::number(status) + " Test\r\nContent-Type: application/json\r\nContent-Length: "
-                              + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
+                socket->write("HTTP/1.1 " + QByteArray::number(status) +
+                              " Test\r\nContent-Type: application/json\r\nContent-Length: " +
+                              QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
                 socket->disconnectFromHost();
             });
         });
@@ -68,7 +71,7 @@ private slots:
         aha::EngineClient client;
         QSignalSpy failed(&client, &aha::EngineClient::requestFailed);
         aha::EngineConfig config;
-        config.baseUrl = QStringLiteral("invalid");
+        config.baseUrl = QStringLiteral("ftp://localhost");
         client.fetchModels(config);
         QCOMPARE(failed.size(), 1);
     }

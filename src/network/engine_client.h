@@ -8,20 +8,22 @@
 
 class QNetworkReply;
 
-namespace aha {
+namespace aha
+{
 
-class EngineClient final : public QObject {
+class EngineClient final : public QObject
+{
     Q_OBJECT
 
-public:
+  public:
     explicit EngineClient(QObject *parent = nullptr);
     void fetchModels(const EngineConfig &config);
 
-signals:
+  signals:
     void modelsReady(const QStringList &models);
     void requestFailed(const QString &message);
 
-private:
+  private:
     QNetworkAccessManager network_;
     QPointer<QNetworkReply> activeReply_;
 };

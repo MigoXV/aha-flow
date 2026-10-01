@@ -10,10 +10,11 @@ set_target_properties(aha-flow PROPERTIES
 install(TARGETS aha-flow
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    COMPONENT Runtime
 )
 
 # Windows 发布包携带 Qt DLL、平台插件和编译器运行库。
 if(WIN32)
     qt_generate_deploy_app_script(TARGET aha-flow OUTPUT_SCRIPT deploy_script)
-    install(SCRIPT ${deploy_script})
+    install(SCRIPT ${deploy_script} COMPONENT Runtime)
 endif()
