@@ -73,8 +73,15 @@ jobs:
             $directory = Join-Path $env:GITHUB_WORKSPACE "build/windows/ui-screenshots/$scale"
             New-Item -ItemType Directory -Force -Path $directory | Out-Null
             $env:AHA_FLOW_SCREENSHOT_DIR = $directory
-            & ./build/windows/Release/aha_ui_tests.exe fontsSurviveStylingAndDpi compactSettingsAndTranscript -o "$directory/test-results.txt,txt" 2> "$directory/font-engine.log"
-            if ($LASTEXITCODE -ne 0) {
+            $arguments = @('fontsSurviveStylingAndDpi', 'compactSettingsAndTranscript', '-o', "`"$directory/test-results.txt,txt`"")
+            $process = Start-Process ./build/windows/Release/aha_ui_tests.exe -ArgumentList $arguments -NoNewWindow -PassThru -RedirectStandardError "$directory/font-engine.log"
+            if (-not $process.WaitForExit(40000)) {
+              Stop-Process -Id $process.Id -Force
+              Add-Content "$directory/test-results.txt" 'Native UI test timed out after 40 seconds.'
+              $failedChecks += 1
+            } else {
+              $process.WaitForExit()
+              if ($process.ExitCode -eq 0) { continue }
               Get-Content "$directory/test-results.txt"
               $failedChecks += 1
             }
