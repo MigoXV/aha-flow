@@ -51,7 +51,9 @@ ctest --test-dir build/windows -C Release --output-on-failure
 
 界面采用「苍渊·白垣」双主题，默认白垣浅色，可在外观设置中切换苍渊深色，立即生效并记住选择。正文 14px、行距 22px；不同转写段自然换行，没有轮次编号、段标题或额外段距。常规控件高 40px，紧凑按钮为 32 × 32。图标来自 [Figma 设计稿](https://www.figma.com/design/gegARxke9qjJq0xydnJ3fN?node-id=10-2)，随程序资源打包，启动时不访问 Figma。
 
-字体根据本机实际安装情况选择：中文优先 Noto Sans / 思源黑体，Windows 未安装它们时优先使用微软雅黑 UI / 微软雅黑；西文优先 Inter / Segoe UI。先选定已安装的字体再应用样式，避免缺失字体被替换为宋体；Windows 使用完整字形微调，保持小字号文字清晰。
+字体根据本机实际安装情况选择，并检查中文字体的字形支持。Windows 中文优先微软雅黑 UI / 微软雅黑 / 等线，西文与数字优先 Segoe UI；其他平台中文优先 Noto Sans / 思源黑体，西文优先 Inter。应用默认字体与窗口字体保持一致，下拉列表和输入提示也沿用这一选择，不携带额外字体资源。
+
+Qt 6 自动跟随系统显示缩放，Windows 默认支持每显示器 DPI 感知。200% 缩放时，14px 正文按 28 个物理像素绘制，窗口逻辑尺寸保持不变。字体使用平台默认微调策略，让 Qt 在高 DPI 下选择 DirectWrite；不强制 Full Hinting，也不叠加额外缩放。
 
 配置自动保存，**下一次开始识别时生效**。主题切换立即生效；识别与缓存配置使用开始时的会话快照。停止/重新开始会创建新的缓存会话，旧会话的迟到事件不会覆盖新会话。
 
@@ -180,6 +182,8 @@ aha-flow/
 ## GitHub Actions 与打包
 
 推送、PR 和手动触发执行离线构建/测试并上传产物：Ubuntu 24.04 的 `.tar.gz`，Windows 2022 / Qt 6.8.3 / MSVC 2022 的 `.zip`。Windows 部署步骤收集 Qt DLL、平台和多媒体插件及编译器运行库。工作流不访问局域网引擎，无需引擎密钥；未自动发布 GitHub Release。
+
+Windows 还通过原生 `windows` 平台验证 100%、125%、200% 缩放，上传 `aha-flow-windows-ui-checks`：包含浅色/深色窗口截图、`fonts.json` 中各控件的请求字体与中文实际字形字体、字体引擎日志及测试结果。常规离线测试继续使用 `offscreen`；原生截图用于核查 Windows 字体路径，不替代实际显示器上的视觉确认。
 
 Linux 包需要目标机器安装兼容版本的 Qt 运行库，当前不是 AppImage。Windows 解压后运行 `bin/aha-flow.exe`。音频依赖的许可证随包附在 `share/aha-flow/licenses`。
 

@@ -1,6 +1,7 @@
 #include "ui/theme.h"
 
 #include <QFontDatabase>
+#include <QRawFont>
 #include <QResource>
 #include <QPainter>
 #include <QSvgRenderer>
@@ -14,13 +15,22 @@ namespace aha
 {
 namespace
 {
-QString installedFontFamily(const QStringList &preferred)
+QString installedFontFamily(const QStringList &preferred, bool chinese = false)
 {
     static const QStringList available = QFontDatabase::families();
     for (const QString &candidate : preferred)
         for (const QString &family : available)
-            if (family.compare(candidate, Qt::CaseInsensitive) == 0)
+            if (family.compare(candidate, Qt::CaseInsensitive) == 0) {
+                if (chinese) {
+                    QFont probe(family);
+                    probe.setPixelSize(14);
+                    const auto face = QRawFont::fromFont(probe);
+                    if (!face.isValid() || !face.supportsCharacter(QChar(0x4E2D)) ||
+                        !face.supportsCharacter(QChar(0x6587)))
+                        continue;
+                }
                 return family;
+            }
     return QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
 }
 } // namespace
@@ -51,19 +61,44 @@ QFont uiFont(int pixels, bool medium, bool latin)
 {
     // Stylesheets can retain only the primary family. Resolve an installed face first
     // so missing Noto fonts do not turn into serif substitutes on Windows.
-    static const QString chinese =
-        installedFontFamily({"Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "思源黑体", "Microsoft YaHei UI",
-                             "微软雅黑 UI", "Microsoft YaHei", "微软雅黑", "DengXian", "等线", "PingFang SC", "苹方-简",
-                             "Heiti SC", "黑体-简", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "DejaVu Sans"});
-    static const QString western =
-        installedFontFamily({"Inter", "Segoe UI", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Arial"});
+    static const QString chinese = installedFontFamily(
+        {
+#ifdef Q_OS_WIN
+            "Microsoft YaHei UI",
+            "微软雅黑 UI",
+            "Microsoft YaHei",
+            "微软雅黑",
+            "DengXian",
+            "等线",
+#endif
+            "Noto Sans SC",
+            "Noto Sans CJK SC",
+            "Source Han Sans SC",
+            "思源黑体",
+            "Microsoft YaHei UI",
+            "微软雅黑 UI",
+            "Microsoft YaHei",
+            "微软雅黑",
+            "DengXian",
+            "等线",
+            "PingFang SC",
+            "苹方-简",
+            "Heiti SC",
+            "黑体-简",
+            "WenQuanYi Micro Hei",
+            "WenQuanYi Zen Hei"},
+        true);
+    static const QString western = installedFontFamily({
+#ifdef Q_OS_WIN
+        "Segoe UI",
+#endif
+        "Inter", "Segoe UI", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Arial"});
     QFont font(latin ? western : chinese);
     font.setStyleHint(QFont::SansSerif);
     font.setPixelSize(pixels);
     font.setWeight(medium ? QFont::Medium : QFont::Normal);
-#ifdef Q_OS_WIN
-    font.setHintingPreference(QFont::PreferFullHinting);
-#endif
+    // Qt's Windows font database selects DirectWrite at high DPI with default
+    // hinting. Forcing full hinting instead selects the GDI path in Qt 6.8.
     return font;
 }
 

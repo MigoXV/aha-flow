@@ -60,6 +60,28 @@ jobs:
         run: cmake --build build/windows --config Release --parallel 2
       - name: Test without the LAN engine
         run: ctest --test-dir build/windows -C Release --output-on-failure
+      - name: Check native Windows fonts and DPI
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = 'windows'
+          $env:QT_LOGGING_RULES = 'qt.qpa.fonts.debug=true'
+          foreach ($scale in @('1', '1.25', '2')) {
+            $env:QT_SCALE_FACTOR = $scale
+            $directory = Join-Path $env:GITHUB_WORKSPACE "build/windows/ui-screenshots/$scale"
+            New-Item -ItemType Directory -Force -Path $directory | Out-Null
+            $env:AHA_FLOW_SCREENSHOT_DIR = $directory
+            & ./build/windows/tests/Release/aha_ui_tests.exe fontsSurviveStylingAndDpi compactSettingsAndTranscript -o "$directory/test-results.txt,txt" 2> "$directory/font-engine.log"
+            if ($LASTEXITCODE -ne 0) {
+              Get-Content "$directory/test-results.txt"
+              throw "Native Windows UI check failed at scale $scale"
+            }
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aha-flow-windows-ui-checks
+          path: build/windows/ui-screenshots/
+          if-no-files-found: warn
       - name: Package with Qt runtime
         working-directory: build/windows
         run: cpack -C Release -G ZIP

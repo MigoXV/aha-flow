@@ -1,4 +1,5 @@
 #include "ui/main_window.h"
+#include "ui/theme.h"
 #include "network/realtime_client.h"
 #include <QApplication>
 #include <QCommandLineParser>
@@ -23,8 +24,10 @@ int main(int argc, char *argv[])
     std::unique_ptr<QCoreApplication> app;
     if (headless)
         app = std::make_unique<QCoreApplication>(argc, argv);
-    else
+    else {
         app = std::make_unique<QApplication>(argc, argv);
+        QApplication::setFont(aha::uiFont());
+    }
     QCoreApplication::setApplicationName("aha-flow");
     QCoreApplication::setApplicationVersion(AHA_FLOW_VERSION);
     QCoreApplication::setOrganizationName("aha-flow");

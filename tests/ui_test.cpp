@@ -4,15 +4,25 @@
 #include <QAbstractTextDocumentLayout>
 #include <QDialog>
 #include <QDir>
+#include <QFile>
+#include <QFontDatabase>
+#include <QFontInfo>
+#include <QGlyphRun>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QRawFont>
 #include <QScrollBar>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTabWidget>
+#include <QTabBar>
+#include <QToolButton>
 #include <QTextBlock>
 #include <QTextBlockFormat>
 #include <QTextLayout>
@@ -30,6 +40,99 @@ class UiTest final : public QObject
         QCoreApplication::setApplicationVersion("0.2.0");
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory_.path());
+        QApplication::setFont(aha::uiFont());
+    }
+    void fontsSurviveStylingAndDpi()
+    {
+        aha::AppSettings settings;
+        settings.theme = QStringLiteral("vallum");
+        settings.engine.baseUrl = QStringLiteral("http://127.0.0.1:1");
+        aha::MainWindow window(settings, false);
+        window.show();
+        window.showSettings(true);
+        const QFont expected = aha::uiFont();
+        const auto face = QRawFont::fromFont(expected);
+        const bool hasChinese = face.supportsCharacter(QChar(0x4E2D)) && face.supportsCharacter(QChar(0x6587));
+        QCOMPARE(QApplication::font().family(), expected.family());
+        QCOMPARE(expected.hintingPreference(), QFont::PreferDefaultHinting);
+#ifdef Q_OS_WIN
+        const auto installed = QFontDatabase::families();
+        if (installed.contains(QStringLiteral("Microsoft YaHei UI"), Qt::CaseInsensitive))
+            QCOMPARE(expected.family().toLower(), QStringLiteral("microsoft yahei ui"));
+        if (installed.contains(QStringLiteral("Segoe UI"), Qt::CaseInsensitive))
+            QCOMPARE(aha::uiFont(12, false, true).family().toLower(), QStringLiteral("segoe ui"));
+#endif
+        if (!hasChinese)
+            qWarning("This test host has no preferred CJK font; inspect glyph fallbacks in fonts.json.");
+        auto *dialog = window.findChild<QDialog *>("settingsDialog");
+        auto *transcript = window.findChild<QTextEdit *>("transcript");
+        window.session()->transcriptChanged({"font", "中文转写设置录音", true, false, false, {}});
+        QJsonArray report;
+        for (const QString &theme : {QStringLiteral("vallum"), QStringLiteral("abyssus")}) {
+            window.findChild<QPushButton *>(theme == "vallum" ? "themeVallum" : "themeAbyssus")->click();
+            QTest::qWait(30);
+            QList<QWidget *> controls{dialog,
+                                      transcript,
+                                      window.findChild<QLabel *>("recognitionStatus"),
+                                      window.findChild<QToolButton *>("recordButton"),
+                                      window.findChild<QComboBox *>("engineAddress"),
+                                      window.findChild<QComboBox *>("engineAddress")->lineEdit(),
+                                      window.findChild<QComboBox *>("model"),
+                                      window.findChild<QTabWidget *>("settingsTabs")->tabBar()};
+            for (auto *label : dialog->findChildren<QLabel *>())
+                controls.append(label);
+            for (auto *edit : dialog->findChildren<QLineEdit *>())
+                controls.append(edit);
+            for (auto *button : dialog->findChildren<QPushButton *>())
+                controls.append(button);
+            for (auto *control : controls) {
+                QVERIFY(control);
+                const QFont font = control->font();
+                QCOMPARE(font.family(), expected.family());
+                QCOMPARE(font.hintingPreference(), QFont::PreferDefaultHinting);
+                QTextLayout layout(QStringLiteral("中文转写设置录音"), font);
+                layout.beginLayout();
+                layout.createLine();
+                layout.endLayout();
+                QJsonArray glyphFamilies;
+                const auto runs = layout.glyphRuns();
+                QVERIFY(!runs.isEmpty());
+                for (const auto &run : runs) {
+                    glyphFamilies.append(run.rawFont().familyName());
+                    if (hasChinese) {
+                        QCOMPARE(run.rawFont().familyName(), face.familyName());
+                        for (const auto glyph : run.glyphIndexes())
+                            QVERIFY(glyph != 0);
+                    }
+                }
+                report.append(QJsonObject{{"theme", theme},
+                                          {"widget", control->metaObject()->className()},
+                                          {"name", control->objectName()},
+                                          {"family", font.family()},
+                                          {"resolvedFamily", QFontInfo(font).family()},
+                                          {"pixelSize", font.pixelSize()},
+                                          {"chineseGlyphFamilies", glyphFamilies}});
+            }
+            QCOMPARE(transcript->document()->defaultFont().family(), expected.family());
+            QCOMPARE(transcript->document()->firstBlock().begin().fragment().charFormat().font().family(),
+                     expected.family());
+        }
+        const auto screenshot = window.grab();
+        QCOMPARE(window.size(), QSize(360, 420));
+        QCOMPARE(dialog->size(), QSize(480, 640));
+        QCOMPARE(screenshot.size(),
+                 QSize(qRound(360 * screenshot.devicePixelRatio()), qRound(420 * screenshot.devicePixelRatio())));
+        const QString screenshots = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+        if (!screenshots.isEmpty()) {
+            QVERIFY(QDir().mkpath(screenshots));
+            QFile output(QDir(screenshots).filePath("fonts.json"));
+            QVERIFY(output.open(QIODevice::WriteOnly));
+            const QJsonDocument document(QJsonObject{{"platform", QGuiApplication::platformName()},
+                                                     {"devicePixelRatio", screenshot.devicePixelRatio()},
+                                                     {"preferredChineseAvailable", hasChinese},
+                                                     {"controls", report}});
+            QCOMPARE(output.write(document.toJson()), qint64(document.toJson().size()));
+        }
     }
     void compactSettingsAndTranscript()
     {
