@@ -1,0 +1,12 @@
+/build/
+/dist/
+/.cache/
+/CMakeUserPresets.json
+/compile_commands.json
+*.user
+*.user.*
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example

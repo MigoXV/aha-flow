@@ -1,0 +1,68 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build qt6-base-dev
+      - name: Configure
+        run: cmake --preset release
+      - name: Build
+        run: cmake --build --preset release --parallel 2
+      - name: Test without the LAN engine
+        run: ctest --preset release
+      - name: Package
+        working-directory: build/release
+        run: cpack -G TGZ
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aha-flow-linux-x64
+          path: build/release/aha-flow-*.tar.gz
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4.3.0
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Configure
+        run: cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON
+      - name: Build
+        run: cmake --build build/windows --config Release --parallel 2
+      - name: Test without the LAN engine
+        run: ctest --test-dir build/windows -C Release --output-on-failure
+      - name: Package with Qt runtime
+        working-directory: build/windows
+        run: cpack -C Release -G ZIP
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aha-flow-windows-x64
+          path: build/windows/aha-flow-*.zip
+          if-no-files-found: error
