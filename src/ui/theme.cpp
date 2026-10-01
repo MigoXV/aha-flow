@@ -1,5 +1,6 @@
 #include "ui/theme.h"
 
+#include <QFontDatabase>
 #include <QResource>
 #include <QPainter>
 #include <QSvgRenderer>
@@ -11,6 +12,19 @@ static void registerUiResources()
 
 namespace aha
 {
+namespace
+{
+QString installedFontFamily(const QStringList &preferred)
+{
+    static const QStringList available = QFontDatabase::families();
+    for (const QString &candidate : preferred)
+        for (const QString &family : available)
+            if (family.compare(candidate, Qt::CaseInsensitive) == 0)
+                return family;
+    return QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
+}
+} // namespace
+
 void initializeUiResources()
 {
     static const bool initialized = [] {
@@ -35,12 +49,21 @@ const Theme &theme(bool dark)
 
 QFont uiFont(int pixels, bool medium, bool latin)
 {
-    QFont font;
-    font.setFamilies(
-        latin ? QStringList{"Inter", "Segoe UI", "Noto Sans", "sans-serif"}
-              : QStringList{"Noto Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", "Segoe UI", "sans-serif"});
+    // Stylesheets can retain only the primary family. Resolve an installed face first
+    // so missing Noto fonts do not turn into serif substitutes on Windows.
+    static const QString chinese =
+        installedFontFamily({"Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "思源黑体", "Microsoft YaHei UI",
+                             "微软雅黑 UI", "Microsoft YaHei", "微软雅黑", "DengXian", "等线", "PingFang SC", "苹方-简",
+                             "Heiti SC", "黑体-简", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei", "DejaVu Sans"});
+    static const QString western =
+        installedFontFamily({"Inter", "Segoe UI", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Arial"});
+    QFont font(latin ? western : chinese);
+    font.setStyleHint(QFont::SansSerif);
     font.setPixelSize(pixels);
     font.setWeight(medium ? QFont::Medium : QFont::Normal);
+#ifdef Q_OS_WIN
+    font.setHintingPreference(QFont::PreferFullHinting);
+#endif
     return font;
 }
 
