@@ -44,6 +44,11 @@ class UiTest final : public QObject
     }
     void fontsSurviveStylingAndDpi()
     {
+#ifdef Q_OS_WIN
+        if (QGuiApplication::platformName() != QStringLiteral("windows"))
+            QSKIP("Windows glyph diagnostics require the native windows font backend.");
+#endif
+        qInfo("Checking native font selection and widget styling");
         aha::AppSettings settings;
         settings.theme = QStringLiteral("vallum");
         settings.engine.baseUrl = QStringLiteral("http://127.0.0.1:1");
@@ -52,6 +57,7 @@ class UiTest final : public QObject
         window.showSettings(true);
         const QFont expected = aha::uiFont();
         const auto face = QRawFont::fromFont(expected);
+        qInfo("UI family: %s; physical face: %s", qPrintable(expected.family()), qPrintable(face.familyName()));
         const bool hasChinese = face.supportsCharacter(QChar(0x4E2D)) && face.supportsCharacter(QChar(0x6587));
         QCOMPARE(QApplication::font().family(), expected.family());
         QCOMPARE(expected.hintingPreference(), QFont::PreferDefaultHinting);
@@ -88,11 +94,15 @@ class UiTest final : public QObject
             for (auto *control : controls) {
                 QVERIFY(control);
                 const QFont font = control->font();
+                qInfo("Checking %s/%s, font %s", control->metaObject()->className(), qPrintable(control->objectName()),
+                      qPrintable(font.family()));
                 QCOMPARE(font.family(), expected.family());
                 QCOMPARE(font.hintingPreference(), QFont::PreferDefaultHinting);
                 QTextLayout layout(QStringLiteral("中文转写设置录音"), font);
                 layout.beginLayout();
-                layout.createLine();
+                auto line = layout.createLine();
+                QVERIFY(line.isValid());
+                line.setLineWidth(1000);
                 layout.endLayout();
                 QJsonArray glyphFamilies;
                 const auto runs = layout.glyphRuns();
