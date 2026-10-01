@@ -3,6 +3,7 @@
 #include <QCheckBox>
 #include <QCloseEvent>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
