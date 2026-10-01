@@ -13,12 +13,12 @@ Ubuntu 24.04 / Debian 13：
 ```bash
 sudo apt update
 sudo apt install -y build-essential cmake ninja-build git \
-  qt6-base-dev qt6-multimedia-dev qt6-websockets-dev
+  qt6-base-dev qt6-multimedia-dev qt6-websockets-dev qt6-svg-dev
 ```
 
 FLAC 1.5.0 和 libsamplerate 0.2.2 由 CMake 下载、校验 SHA-256 并静态编译，无需额外安装它们的开发包。首次配置需要能访问 GitHub。可选安装 `qtcreator`，打开根目录的 `CMakeLists.txt`。
 
-Windows 安装 Visual Studio 2022 的“使用 C++ 的桌面开发”，以及 Qt 6.8.3 **MSVC 2022 64-bit** 套件，包含 Qt Multimedia、Qt WebSockets。
+Windows 安装 Visual Studio 2022 的“使用 C++ 的桌面开发”，以及 Qt 6.8.3 **MSVC 2022 64-bit** 套件，包含 Qt Multimedia、Qt WebSockets、Qt SVG。
 
 ## 构建与运行
 
@@ -47,9 +47,11 @@ ctest --test-dir build/windows -C Release --output-on-failure
 
 ## 界面与设置
 
-展开窗口默认 300 × 250，紧凑窗口 300 × 58。紧凑模式显示当前轮末尾文字、状态点、计时和麦克风按钮。展开模式可以选择/复制转写文字，左下角可缩放窗口。设置按钮打开窗口内的滚动设置面板。
+展开窗口默认 360 × 420，紧凑窗口 360 × 64。紧凑模式显示当前轮末尾文字、状态点、计时和识别按钮。展开模式可以选择/复制转写文字，左下角可缩放窗口。设置按钮打开独立的 480 × 640 设置窗，按识别引擎、文本纠错、录音缓存和外观分组，内容过长时滚动，底部操作始终可见。
 
-配置自动保存，**下一次开始识别时生效**。当前会话使用开始时的配置快照；停止/重新开始会创建新的缓存会话，旧会话的迟到事件不会覆盖新会话。
+界面采用「苍渊·白垣」双主题，默认白垣浅色，可在外观设置中切换苍渊深色，立即生效并记住选择。正文 14px、行距 22px；不同转写段自然换行，没有轮次编号、段标题或额外段距。常规控件高 40px，紧凑按钮为 32 × 32。图标来自 [Figma 设计稿](https://www.figma.com/design/gegARxke9qjJq0xydnJ3fN?node-id=10-2)，随程序资源打包，启动时不访问 Figma。
+
+配置自动保存，**下一次开始识别时生效**。主题切换立即生效；识别与缓存配置使用开始时的会话快照。停止/重新开始会创建新的缓存会话，旧会话的迟到事件不会覆盖新会话。
 
 | 配置 | 默认值 / 行为 |
 | --- | --- |
@@ -63,12 +65,13 @@ ctest --test-dir build/windows -C Release --output-on-failure
 | 录音缓存 | 默认开启，保存原始音频及有完整边界的 VAD 分段 |
 | 缓存目录 | 系统缓存目录下的 `aha-flow/data-bin`，可输入绝对路径或浏览选择 |
 | 原始录音切片时长 | 默认 300 秒，可设为 1–3600 秒 |
+| 界面主题 | 白垣浅色 / 苍渊深色，默认白垣，即时切换并持久化 |
 
 成功连接的服务地址保留最近 5 条。设置使用系统 `QSettings` 保存；面板中填写的 API Key 也保存在本机配置中，未接入系统密钥库。环境变量 `AHA_FLOW_API_KEY` 和 `--engine` 仅覆盖本次运行，不写回设置。
 
 同一轮的中间预览随 revision 更新；`interim_cleared` 后保留已有预览，正式增量到达后替换预览。物理停顿显示“语义轮次未结束”，语义结束后显示“转写中”，最终结果固定为一段文本。
 
-启用纠错后，按轮次调用 Responses SSE 接口，使用 `AgenticASR-Refiner`、`temperature=0`、`stream=true`、`store=false`。纠错增量以金色显示，隐藏 `<KEY>` 实体标记；超时、截断、空结果或请求失败时恢复识别原文并显示原因。识别 API Key 不发送给纠错服务。
+启用纠错后，按轮次调用 Responses SSE 接口，使用 `AgenticASR-Refiner`、`temperature=0`、`stream=true`、`store=false`。纠错增量显示进度提示，正文保持主题文字色，隐藏 `<KEY>` 实体标记；超时、截断、空结果或请求失败时恢复识别原文并显示原因。识别 API Key 不发送给纠错服务。
 
 ## 缓存格式与生命周期
 

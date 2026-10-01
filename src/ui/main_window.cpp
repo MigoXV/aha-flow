@@ -1,4 +1,7 @@
 #include "ui/main_window.h"
+#include "ui/settings_window.h"
+#include "ui/theme.h"
+#include "ui/widgets.h"
 
 #include <QCheckBox>
 #include <QCloseEvent>
@@ -12,11 +15,12 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QProgressBar>
-#include <QScrollArea>
+#include <QScreen>
 #include <QScrollBar>
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QTextBlock>
+#include <QTextBlockFormat>
 #include <QTextCursor>
 #include <QTextEdit>
 #include <QTimer>
@@ -28,125 +32,88 @@ namespace aha
 {
 namespace
 {
-QIcon icon(const QString &name, const QColor &color = QColor("#111111"))
-{
-    QPixmap pixmap(24, 24);
-    pixmap.fill(Qt::transparent);
-    QPainter p(&pixmap);
-    p.setRenderHint(QPainter::Antialiasing);
-    p.setPen(QPen(color, 1.7, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    if (name == "mic") {
-        p.drawRoundedRect(QRectF(9, 3, 6, 12), 3, 3);
-        p.drawArc(QRectF(6, 6, 12, 13), 180 * 16, 180 * 16);
-        p.drawLine(12, 19, 12, 22);
-        p.drawLine(8, 22, 16, 22);
-    } else if (name == "stop") {
-        p.setBrush(color);
-        p.drawRoundedRect(QRectF(7, 7, 10, 10), 1, 1);
-    } else if (name == "close") {
-        p.drawLine(6, 6, 18, 18);
-        p.drawLine(18, 6, 6, 18);
-    } else if (name == "settings") {
-        p.drawEllipse(QRectF(5, 5, 14, 14));
-        p.drawEllipse(QRectF(9, 9, 6, 6));
-        for (int i = 0; i < 8; ++i) {
-            p.save();
-            p.translate(12, 12);
-            p.rotate(i * 45);
-            p.drawLine(0, -7, 0, -10);
-            p.restore();
-        }
-    } else if (name == "resize") {
-        p.drawLine(5, 15, 13, 23);
-        p.drawLine(5, 20, 8, 23);
-    } else {
-        p.drawLine(5, 5, 10, 10);
-        p.drawLine(14, 14, 19, 19);
-        p.drawLine(5, 5, 5, 10);
-        p.drawLine(5, 5, 10, 5);
-        p.drawLine(19, 19, 14, 19);
-        p.drawLine(19, 19, 19, 14);
-    }
-    return QIcon(pixmap);
-}
 QToolButton *button(const QString &name, const QString &tip, QWidget *parent)
 {
     auto *b = new QToolButton(parent);
-    b->setIcon(icon(name));
-    b->setIconSize(QSize(18, 18));
+    b->setProperty("iconName", name);
+    b->setIcon(uiIcon(name, false));
+    b->setIconSize(QSize(20, 20));
     b->setToolTip(tip);
     b->setAccessibleName(tip);
-    b->setFixedSize(26, 26);
+    b->setFixedSize(32, 32);
     return b;
+}
+QLabel *caption(const QString &text, QWidget *parent)
+{
+    auto *label = new QLabel(text, parent);
+    label->setFont(uiFont(12));
+    label->setProperty("role", "caption");
+    label->setMinimumHeight(18);
+    return label;
 }
 } // namespace
 MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *parent)
     : QWidget(parent), settings_(settings)
 {
+    initializeUiResources();
     setObjectName("floatingWindow");
     setWindowTitle("aha-flow");
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     setAttribute(Qt::WA_TranslucentBackground);
-    setMinimumSize(280, 220);
+    setFont(uiFont());
+    setMinimumSize(360, 300);
     resize(expandedSize_);
-    setStyleSheet(QStringLiteral(
-        "QWidget{font-family:'Segoe UI','Noto Sans',sans-serif;font-size:11px;color:#111111;}"
-        "QFrame#shell{background:white;border:1px solid rgba(32,38,46,40);border-radius:8px;}"
-        "QToolButton{border:0;background:#f2f2f2;border-radius:5px;}QToolButton:hover{background:#e5e5e5;}"
-        "QToolButton:disabled{background:#f5f5f5;}"
-        "QToolButton#recordButton,QToolButton#compactRecordButton{background:#111111;}"
-        "QToolButton#recordButton:hover,QToolButton#compactRecordButton:hover{background:#000000;}"
-        "QToolButton#recordButton:disabled,QToolButton#compactRecordButton:disabled{background:#a6a6a6;}"
-        "QLineEdit,QComboBox,QSpinBox{background:white;border:1px solid #dddddd;border-radius:4px;padding:3px;}"
-        "QLabel#title{font-size:13px;font-weight:600;}QLabel#version{font-size:9px;color:#8a8a8a;}"
-        "QTextEdit{border:0;background:white;font-size:12px;}QScrollArea{border:0;background:white;}"
-        "QProgressBar{border:0;background:#eeeeee;height:3px;border-radius:1px;}QProgressBar::chunk{background:#111111;"
-        "}"
-        "QLabel#historyHint{font-size:9px;color:#777777;}"));
     auto *outer = new QVBoxLayout(this);
-    outer->setContentsMargins(6, 6, 6, 6);
+    outer->setContentsMargins(0, 0, 0, 0);
     auto *shell = new QFrame(this);
     shell->setObjectName("shell");
     outer->addWidget(shell);
     auto *layout = new QVBoxLayout(shell);
-    layout->setContentsMargins(10, 7, 8, 4);
-    layout->setSpacing(5);
+    layout->setContentsMargins(15, 15, 15, 15);
+    layout->setSpacing(16);
     header_ = new QWidget(shell);
+    header_->setFixedHeight(32);
     auto *headerLayout = new QHBoxLayout(header_);
     headerLayout->setContentsMargins(0, 0, 0, 0);
-    headerLayout->setSpacing(5);
+    headerLayout->setSpacing(8);
     dot_ = new QLabel(header_);
-    dot_->setFixedSize(7, 7);
+    dot_->setFixedSize(6, 6);
     headerLayout->addWidget(dot_);
+    dot_->hide();
     brand_ = new QWidget(header_);
-    auto *brandLayout = new QVBoxLayout(brand_);
+    auto *brandLayout = new QHBoxLayout(brand_);
     brandLayout->setContentsMargins(0, 0, 0, 0);
-    brandLayout->setSpacing(0);
+    brandLayout->setSpacing(8);
     auto *title = new QLabel("aha-flow", brand_);
     title->setObjectName("title");
+    title->setFont(uiFont(18, true, true));
     brandLayout->addWidget(title);
-    version_ = new QLabel("v" + QCoreApplication::applicationVersion(), brand_);
+    version_ = caption(QCoreApplication::applicationVersion(), brand_);
     version_->setObjectName("version");
+    version_->setFont(uiFont(12, false, true));
     brandLayout->addWidget(version_);
+    brandLayout->addStretch();
     headerLayout->addWidget(brand_, 1);
-    caption_ = new QLabel(header_);
+    caption_ = new ElidedLabel(header_);
     caption_->setMinimumWidth(0);
     caption_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     headerLayout->addWidget(caption_, 1);
     caption_->hide();
-    compactTime_ = new QLabel("00:00", header_);
+    compactTime_ = caption("00:00", header_);
+    compactTime_->setFont(uiFont(12, true, true));
     headerLayout->addWidget(compactTime_);
     compactTime_->hide();
     compactRecord_ = button("mic", QStringLiteral("开始识别"), header_);
     compactRecord_->setObjectName("compactRecordButton");
+    compactRecord_->setProperty("primary", true);
     headerLayout->addWidget(compactRecord_);
     compactRecord_->hide();
-    expandButton_ = button("expand", QStringLiteral("缩小"), header_);
-    expandButton_->setObjectName("compactButton");
-    headerLayout->addWidget(expandButton_);
     settingsButton_ = button("settings", QStringLiteral("设置"), header_);
     settingsButton_->setObjectName("settingsButton");
     headerLayout->addWidget(settingsButton_);
+    expandButton_ = button("collapse", QStringLiteral("缩小"), header_);
+    expandButton_->setObjectName("compactButton");
+    headerLayout->addWidget(expandButton_);
     auto *close = button("close", QStringLiteral("关闭窗口"), header_);
     headerLayout->addWidget(close);
     layout->addWidget(header_);
@@ -157,117 +124,102 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     body_ = new QWidget(shell);
     auto *bodyLayout = new QVBoxLayout(body_);
     bodyLayout->setContentsMargins(0, 0, 0, 0);
-    bodyLayout->setSpacing(5);
+    bodyLayout->setSpacing(16);
     auto *controls = new QHBoxLayout;
-    status_ = new QLabel(QStringLiteral("待机"), body_);
+    controls->setSpacing(8);
+    statusDot_ = new QLabel(body_);
+    statusDot_->setFixedSize(6, 6);
+    controls->addWidget(statusDot_);
+    status_ = caption(QStringLiteral("待机"), body_);
+    status_->setProperty("role", "status");
     status_->setObjectName("recognitionStatus");
-    status_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    time_ = new QLabel("00:00", body_);
+    status_->setMinimumHeight(24);
     controls->addWidget(status_, 1);
+    time_ = caption("00:00", body_);
+    time_->setFont(uiFont(12, true, true));
     controls->addWidget(time_);
-    record_ = button("mic", QStringLiteral("开始识别"), body_);
-    record_->setObjectName("recordButton");
-    record_->setFixedSize(34, 34);
-    controls->addWidget(record_);
     bodyLayout->addLayout(controls);
-    settingsPanel_ = new QScrollArea(body_);
-    settingsPanel_->setObjectName("settingsPanel");
-    settingsPanel_->setWidgetResizable(true);
-    settingsPanel_->hide();
-    auto *panel = new QWidget;
-    panel->setStyleSheet("background:white;");
-    auto *form = new QVBoxLayout(panel);
-    form->setContentsMargins(0, 0, 5, 0);
-    form->setSpacing(5);
-    const auto field = [form, panel](const QString &label, QWidget *widget) {
-        form->addWidget(new QLabel(label, panel));
-        form->addWidget(widget);
-    };
-    address_ = new QComboBox(panel);
-    address_->setEditable(true);
-    address_->setObjectName("engineAddress");
-    address_->addItems(settings_.recentServers);
-    address_->setEditText(settings_.engine.baseUrl);
-    field(QStringLiteral("服务基地址"), address_);
-    models_ = new QComboBox(panel);
-    models_->setObjectName("model");
-    models_->addItem(settings_.engine.model);
-    field(QStringLiteral("模型"), models_);
-    modelsError_ = new QLabel(panel);
-    modelsError_->setWordWrap(true);
-    form->addWidget(modelsError_);
-    language_ = new QLineEdit(settings_.engine.language, panel);
-    language_->setPlaceholderText(QStringLiteral("留空使用服务端默认值"));
-    field(QStringLiteral("语言"), language_);
-    apiKey_ = new QLineEdit(settings_.engine.apiKey, panel);
-    apiKey_->setEchoMode(QLineEdit::Password);
-    field(QStringLiteral("API Key（可选）"), apiKey_);
-    const auto check = [panel, form](const QString &text, bool value) {
-        auto *b = new QCheckBox(text, panel);
-        b->setChecked(value);
-        form->addWidget(b);
-        return b;
-    };
-    allowUntrusted_ = check(QStringLiteral("允许自签名证书"), settings_.engine.allowUntrustedCertificate);
-    enableAha_ = check(QStringLiteral("启用 AHA 扩展协议"), settings_.engine.enableAha);
-    enableCorrection_ = check(QStringLiteral("启用文本纠错"), settings_.correction.enabled);
-    correctionUrl_ = new QLineEdit(settings_.correction.responsesUrl, panel);
-    field(QStringLiteral("文本纠错 Responses API 地址"), correctionUrl_);
-    enableCache_ = check(QStringLiteral("启用录音缓存（原始音频与 VAD 分段）"), settings_.cache.enabled);
-    enableCache_->setObjectName("cacheEnabled");
-    cacheDirectory_ = new QLineEdit(settings_.cache.rootDirectory.isEmpty() ? AppSettings::defaultCacheDirectory()
-                                                                            : settings_.cache.rootDirectory,
-                                    panel);
-    cacheDirectory_->setObjectName("cacheDirectory");
-    auto *directoryRow = new QWidget(panel);
-    auto *directoryLayout = new QHBoxLayout(directoryRow);
-    directoryLayout->setContentsMargins(0, 0, 0, 0);
-    directoryLayout->addWidget(cacheDirectory_, 1);
-    auto *browse = new QToolButton(panel);
-    browse->setText(QStringLiteral("浏览…"));
-    directoryLayout->addWidget(browse);
-    field(QStringLiteral("缓存目录"), directoryRow);
-    sliceSeconds_ = new QSpinBox(panel);
-    sliceSeconds_->setObjectName("cacheSliceSeconds");
-    sliceSeconds_->setRange(1, 3600);
-    sliceSeconds_->setSuffix(QStringLiteral(" 秒"));
-    sliceSeconds_->setValue(settings_.cache.rawSliceSeconds);
-    field(QStringLiteral("原始录音切片时长"), sliceSeconds_);
-    auto *note =
-        new QLabel(QStringLiteral("配置自动保存，下次开始识别时生效；目录在开始前检查。不自动清理历史录音。"), panel);
-    note->setWordWrap(true);
-    note->setStyleSheet("color:#777777;font-size:9px;");
-    form->addWidget(note);
-    settingsPanel_->setWidget(panel);
-    bodyLayout->addWidget(settingsPanel_);
+    auto *divider = new QFrame(body_);
+    divider->setProperty("role", "divider");
+    divider->setFixedHeight(1);
+    bodyLayout->addWidget(divider);
+    statusDetail_ = caption({}, body_);
+    statusDetail_->setProperty("role", "status");
+    statusDetail_->setObjectName("statusDetail");
+    statusDetail_->setWordWrap(true);
+    statusDetail_->setMinimumWidth(0);
+    statusDetail_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    statusDetail_->setMaximumHeight(88);
+    statusDetail_->hide();
+    bodyLayout->addWidget(statusDetail_);
+    transcript_ = new QTextEdit(body_);
+    transcript_->setObjectName("transcript");
+    transcript_->setFont(uiFont());
+    transcript_->document()->setDefaultFont(uiFont());
+    transcript_->document()->setDocumentMargin(0);
+    transcript_->setReadOnly(true);
+    transcript_->setUndoRedoEnabled(false);
+    transcript_->setFrameShape(QFrame::NoFrame);
+    transcript_->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    transcript_->setPlaceholderText(QStringLiteral("开始说话，文字会显示在这里。"));
+    bodyLayout->addWidget(transcript_, 1);
+    historyHint_ = caption(QStringLiteral("仅显示最近 1000 轮／约 1 MiB 文字"), body_);
+    historyHint_->setObjectName("historyHint");
+    historyHint_->hide();
+    bodyLayout->addWidget(historyHint_);
+    auto *footer = new QVBoxLayout;
+    footer->setSpacing(8);
     meter_ = new QProgressBar(body_);
     meter_->setRange(0, 100);
     meter_->setValue(0);
     meter_->setTextVisible(false);
-    meter_->setFixedHeight(3);
+    meter_->setFixedHeight(4);
     meter_->setAccessibleName(QStringLiteral("语音电平"));
-    bodyLayout->addWidget(meter_);
-    transcript_ = new QTextEdit(body_);
-    transcript_->setObjectName("transcript");
-    transcript_->setReadOnly(true);
-    transcript_->setUndoRedoEnabled(false);
-    transcript_->setPlaceholderText(QStringLiteral("转写结果会显示在这里"));
-    bodyLayout->addWidget(transcript_, 1);
-    historyHint_ = new QLabel(QStringLiteral("仅显示最近 1000 轮／约 1 MiB 文字"), body_);
-    historyHint_->setObjectName("historyHint");
-    historyHint_->hide();
-    bodyLayout->addWidget(historyHint_);
+    footer->addWidget(meter_);
+    auto *actions = new QHBoxLayout;
+    actions->setSpacing(16);
+    auto *meta = new QVBoxLayout;
+    meta->setSpacing(0);
+    modelHint_ = caption(settings_.engine.model, body_);
+    modelHint_->setFont(uiFont(12, false, true));
+    modelHint_->setMinimumWidth(0);
+    modelHint_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    cacheHint_ = caption({}, body_);
+    meta->addWidget(modelHint_);
+    meta->addWidget(cacheHint_);
+    actions->addLayout(meta, 1);
+    record_ = button("mic", QStringLiteral("开始识别"), body_);
+    record_->setObjectName("recordButton");
+    record_->setProperty("primary", true);
+    record_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    record_->setFont(uiFont(14, true));
+    record_->setFixedSize(128, 40);
+    actions->addWidget(record_);
+    footer->addLayout(actions);
+    bodyLayout->addLayout(footer);
     layout->addWidget(body_, 1);
-    resizeHandle_ = button("resize", QStringLiteral("拖拽调整窗口大小"), shell);
+    resizeHandle_ = new QToolButton(this);
+    resizeHandle_->setObjectName("resizeHandle");
     resizeHandle_->setFixedSize(14, 10);
     resizeHandle_->setCursor(Qt::SizeBDiagCursor);
+    resizeHandle_->setAccessibleName(QStringLiteral("拖拽调整窗口大小"));
+    resizeHandle_->setToolTip(QStringLiteral("拖拽调整窗口大小"));
     resizeHandle_->installEventFilter(this);
-    auto *bottom = new QHBoxLayout;
-    bottom->setContentsMargins(0, 0, 0, 0);
-    bottom->addWidget(resizeHandle_);
-    bottom->addStretch();
-    layout->addLayout(bottom);
-
+    settingsWindow_ = new SettingsWindow(settings_, this);
+    const auto &widgets = settingsWindow_->controls();
+    address_ = widgets.address;
+    models_ = widgets.models;
+    modelsError_ = widgets.modelsError;
+    language_ = widgets.language;
+    apiKey_ = widgets.apiKey;
+    allowUntrusted_ = widgets.allowUntrusted;
+    enableAha_ = widgets.enableAha;
+    enableCorrection_ = widgets.enableCorrection;
+    correctionUrl_ = widgets.correctionUrl;
+    enableCache_ = widgets.enableCache;
+    cacheDirectory_ = widgets.cacheDirectory;
+    sliceSeconds_ = widgets.sliceSeconds;
+    auto *browse = widgets.browse;
     modelsTimer_ = new QTimer(this);
     modelsTimer_->setSingleShot(true);
     modelsTimer_->setInterval(300);
@@ -276,7 +228,7 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
         settings_.engine.baseUrl = value;
         runtimeEngine_.clear();
         saveSettings();
-        if (settingsPanel_->isVisible())
+        if (settingsWindow_->isVisible())
             modelsTimer_->start();
     });
     connect(models_, &QComboBox::currentTextChanged, this, [this](const QString &value) {
@@ -294,14 +246,14 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
         runtimeKey_.clear();
         runtimeKeyProvided_ = false;
         saveSettings();
-        if (settingsPanel_->isVisible())
+        if (settingsWindow_->isVisible())
             modelsTimer_->start();
     });
     connect(allowUntrusted_, &QCheckBox::toggled, this, [this](bool value) {
         settings_.engine.allowUntrustedCertificate = value;
         runtimeSelfSigned_ = false;
         saveSettings();
-        if (settingsPanel_->isVisible())
+        if (settingsWindow_->isVisible())
             modelsTimer_->start();
     });
     connect(enableAha_, &QCheckBox::toggled, this, [this](bool value) {
@@ -337,7 +289,15 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     connect(record_, &QToolButton::clicked, this, &MainWindow::toggleRecording);
     connect(compactRecord_, &QToolButton::clicked, this, &MainWindow::toggleRecording);
     connect(expandButton_, &QToolButton::clicked, this, &MainWindow::toggleCompact);
-    connect(settingsButton_, &QToolButton::clicked, this, [this] { showSettings(!settingsPanel_->isVisible()); });
+    connect(settingsButton_, &QToolButton::clicked, this, [this] { showSettings(true); });
+    connect(settingsWindow_, &QDialog::finished, modelsTimer_, &QTimer::stop);
+    connect(settingsWindow_, &SettingsWindow::themeSelected, this, [this](const QString &name) {
+        if (settings_.theme == name)
+            return;
+        settings_.theme = name;
+        saveSettings();
+        applyTheme();
+    });
     connect(close, &QToolButton::clicked, this, &QWidget::close);
     connect(&engine_, &EngineClient::modelsReady, this, [this](const QStringList &models) {
         const QSignalBlocker blocker(models_);
@@ -347,8 +307,12 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
         models_->addItems(models);
         models_->setCurrentText(settings_.engine.model);
         modelsError_->setText(models.isEmpty() ? QStringLiteral("服务端没有可用模型") : QString());
+        modelsError_->setVisible(models.isEmpty());
     });
-    connect(&engine_, &EngineClient::requestFailed, modelsError_, &QLabel::setText);
+    connect(&engine_, &EngineClient::requestFailed, this, [this](const QString &message) {
+        modelsError_->setText(message);
+        modelsError_->show();
+    });
     connect(&session_, &SessionController::statusChanged, this, &MainWindow::setStatus);
     connect(&session_, &SessionController::transcriptChanged, this, &MainWindow::updateTranscript);
     connect(&session_, &SessionController::levelChanged, this,
@@ -383,6 +347,7 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     auto *clock = new QTimer(this);
     connect(clock, &QTimer::timeout, this, &MainWindow::updateElapsed);
     clock->start(1000);
+    applyTheme();
     setStatus(QStringLiteral("待机"), {});
     if (autoStart)
         QTimer::singleShot(0, this, &MainWindow::startRecognition);
@@ -400,6 +365,7 @@ void MainWindow::setRuntimeOverrides(const QString &engine, const QString &key, 
 void MainWindow::saveSettings()
 {
     settings_.save(store_);
+    updateSessionMetadata();
 }
 void MainWindow::refreshModels()
 {
@@ -411,6 +377,7 @@ void MainWindow::refreshModels()
     if (runtimeSelfSigned_)
         config.allowUntrustedCertificate = true;
     modelsError_->setText(QStringLiteral("正在读取模型…"));
+    modelsError_->show();
     engine_.fetchModels(config);
 }
 void MainWindow::startRecognition()
@@ -435,7 +402,10 @@ void MainWindow::startRecognition()
     elapsed_.invalidate();
     time_->setText("00:00");
     compactTime_->setText("00:00");
+    activeModel_ = snapshot.engine.model;
+    activeCacheEnabled_ = snapshot.cache.enabled;
     session_.start(snapshot);
+    updateSessionMetadata();
 }
 void MainWindow::toggleRecording()
 {
@@ -446,12 +416,21 @@ void MainWindow::toggleRecording()
 }
 void MainWindow::showSettings(bool visible)
 {
-    settingsPanel_->setVisible(visible);
-    settingsPanel_->setMaximumHeight(qMax(70, height() / 2 - 20));
-    if (visible)
+    if (visible) {
+        if (!settingsWindow_->isVisible()) {
+            const QRect available = screen()->availableGeometry();
+            settingsWindow_->move(
+                qMax(available.left(), qMin(geometry().right() + 16, available.right() - settingsWindow_->width() + 1)),
+                qMax(available.top(), qMin(y(), available.bottom() - settingsWindow_->height() + 1)));
+        }
+        settingsWindow_->show();
+        settingsWindow_->raise();
+        settingsWindow_->activateWindow();
         modelsTimer_->start();
-    else
+    } else {
+        settingsWindow_->hide();
         modelsTimer_->stop();
+    }
 }
 void MainWindow::toggleCompact()
 {
@@ -459,13 +438,16 @@ void MainWindow::toggleCompact()
     compact_ = !compact_;
     if (compact_) {
         expandedSize_ = size();
+        body_->hide();
+        brand_->hide();
+        settingsButton_->hide();
         showSettings(false);
-        setMinimumSize(280, 58);
-        setMaximumHeight(58);
-        resize(300, 58);
+        setMinimumSize(360, 64);
+        setMaximumHeight(64);
+        resize(360, 64);
     } else {
         setMaximumHeight(QWIDGETSIZE_MAX);
-        setMinimumSize(280, 220);
+        setMinimumSize(360, 300);
         resize(expandedSize_);
     }
     move(old.right() - width() + 1, old.top());
@@ -473,35 +455,105 @@ void MainWindow::toggleCompact()
     brand_->setVisible(!compact_);
     resizeHandle_->setVisible(!compact_);
     settingsButton_->setVisible(!compact_);
+    dot_->setVisible(compact_);
     caption_->setVisible(compact_);
     compactTime_->setVisible(compact_);
     compactRecord_->setVisible(compact_);
     expandButton_->setToolTip(compact_ ? QStringLiteral("展开") : QStringLiteral("缩小"));
+    expandButton_->setAccessibleName(expandButton_->toolTip());
+    expandButton_->setProperty("iconName", compact_ ? "expand" : "collapse");
+    expandButton_->setIcon(uiIcon(compact_ ? "expand" : "collapse", settings_.theme == "abyssus"));
 }
 void MainWindow::setStatus(const QString &label, const QString &detail)
 {
     statusLabel_ = label;
-    const bool error = label == QStringLiteral("错误"), boundary = label == QStringLiteral("语义轮次未结束"),
-               idle = label == QStringLiteral("待机");
-    const QString background = error ? "#fff3f2" : boundary ? "#eff6ff" : idle ? "#f7f8fa" : "#f1f8f4";
-    const QString color = error ? "#c34747" : boundary ? "#2563eb" : idle ? "#9aa3af" : "#4b9a68";
+    statusDetailText_ = detail;
+    const auto &t = theme(settings_.theme == "abyssus");
+    const bool error = label == QStringLiteral("错误"), idle = label == QStringLiteral("待机");
+    const bool busy = label == QStringLiteral("连接中") || label == QStringLiteral("停止中");
+    if (busy || idle || error)
+        meter_->setValue(0);
+    transcript_->setPlaceholderText(label == QStringLiteral("连接中")
+                                        ? QStringLiteral("正在连接识别引擎…\n连接完成后才会打开麦克风。")
+                                    : error ? QString()
+                                            : QStringLiteral("开始说话，文字会显示在这里。"));
+    const QColor color = error                                       ? t.danger
+                         : idle || label == QStringLiteral("等待中") ? t.secondaryText
+                         : label == QStringLiteral("停止中")         ? t.warning
+                         : label == QStringLiteral("聆听中")         ? t.success
+                                                                     : t.info;
     status_->setText(label);
     status_->setToolTip(detail.isEmpty() ? label : detail);
-    status_->setStyleSheet(
-        QStringLiteral("background:%1;border:1px solid %2;border-radius:5px;padding:5px;color:#20262e;")
-            .arg(background, color));
-    dot_->setStyleSheet(QStringLiteral("background:%1;border-radius:3px;").arg(color));
-    dot_->setToolTip(detail.isEmpty() ? label : detail);
-    const bool busy = label == QStringLiteral("连接中") || label == QStringLiteral("停止中");
+    for (QLabel *dot : {dot_, statusDot_}) {
+        dot->setStyleSheet(QStringLiteral("background:%1;border-radius:3px;").arg(color.name()));
+        dot->setToolTip(detail.isEmpty() ? label : detail);
+    }
+    statusDetail_->setVisible(error && !detail.isEmpty());
+    statusDetail_->setText(detail.left(240) + QStringLiteral("\n检查配置后重新开始。"));
+    statusDetail_->setToolTip(detail);
     if (error || idle)
         recording_ = false;
+    const QString action =
+        busy         ? (label == QStringLiteral("连接中") ? QStringLiteral("连接中…") : QStringLiteral("保存中…"))
+        : recording_ ? QStringLiteral("停止识别")
+        : error      ? QStringLiteral("重新开始")
+                     : QStringLiteral("开始识别");
     for (QToolButton *b : {record_, compactRecord_}) {
         b->setEnabled(!busy);
-        b->setIcon(icon(recording_ ? "stop" : "mic", Qt::white));
-        b->setToolTip(recording_ ? QStringLiteral("停止识别") : QStringLiteral("开始识别"));
+        b->setProperty("iconName", recording_ ? "stop" : "mic");
+        b->setIcon(uiIcon(recording_ ? "stop" : "mic", settings_.theme == "abyssus"));
+        b->setToolTip(action);
+        b->setAccessibleName(action);
     }
+    record_->setText(action);
     if (items_.isEmpty())
         caption_->setText(label);
+    updateSessionMetadata();
+}
+void MainWindow::updateSessionMetadata()
+{
+    const bool active = session_.active();
+    modelHint_->setText(active ? activeModel_ : settings_.engine.model);
+    modelHint_->setToolTip(modelHint_->text());
+    cacheHint_->setText((active ? activeCacheEnabled_ : settings_.cache.enabled) ? QStringLiteral("录音缓存已开启")
+                                                                                 : QStringLiteral("录音缓存已关闭"));
+}
+void MainWindow::applyTheme()
+{
+    const bool dark = settings_.theme == "abyssus";
+    setProperty("theme", settings_.theme);
+    setPalette(themePalette(dark));
+    setStyleSheet(themeStyleSheet(dark));
+    settingsWindow_->applyTheme(settings_.theme);
+    QPixmap grip(14, 10);
+    grip.fill(Qt::transparent);
+    {
+        QPainter painter(&grip);
+        painter.setPen(theme(dark).strongBorder);
+        painter.drawLine(2, 2, 10, 10);
+        painter.drawLine(2, 6, 6, 10);
+    }
+    static_cast<QToolButton *>(resizeHandle_)->setIcon(QIcon(grip));
+    static_cast<QToolButton *>(resizeHandle_)->setIconSize(QSize(14, 10));
+    for (auto *b : findChildren<QToolButton *>()) {
+        const QString name = b->property("iconName").toString();
+        if (!name.isEmpty())
+            b->setIcon(uiIcon(name, dark));
+    }
+    const int scrollPosition = transcript_->verticalScrollBar()->value();
+    const int selectionStart = transcript_->textCursor().anchor();
+    const int selectionEnd = transcript_->textCursor().position();
+    QTextCursor batch(transcript_->document());
+    batch.beginEditBlock();
+    for (int i = 0; i < items_.size(); ++i)
+        renderTranscript(i);
+    batch.endEditBlock();
+    QTextCursor selection(transcript_->document());
+    selection.setPosition(selectionStart);
+    selection.setPosition(selectionEnd, QTextCursor::KeepAnchor);
+    transcript_->setTextCursor(selection);
+    transcript_->verticalScrollBar()->setValue(scrollPosition);
+    setStatus(statusLabel_, statusDetailText_);
 }
 void MainWindow::updateElapsed()
 {
@@ -525,20 +577,39 @@ void MainWindow::renderTranscript(int index)
     cursor.setPosition(block.position() + block.length() - 1, QTextCursor::KeepAnchor);
     const Transcript &item = items_[index];
     QTextCharFormat format;
-    format.setForeground(QColor(item.correcting ? "#a77713" : item.interim ? "#777777" : "#111111"));
+    const auto &t = theme(settings_.theme == "abyssus");
+    format.setFont(uiFont());
+    format.setForeground(item.interim && !item.correcting ? t.secondaryText : t.text);
+    QTextBlockFormat paragraph;
+    paragraph.setTopMargin(0);
+    paragraph.setBottomMargin(0);
+    paragraph.setLineHeight(22, QTextBlockFormat::FixedHeight);
+    cursor.setBlockFormat(paragraph);
     // Keep one document block per round even when a result contains line breaks.
     QString text = item.text;
     text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
     text.replace('\r', QChar(0x2028));
     text.replace('\n', QChar(0x2028));
+    text.replace(QChar(0x2029), QChar(0x2028));
+    int start = 0, end = static_cast<int>(text.size());
+    while (start < end && text[start] == QChar(0x2028))
+        ++start;
+    while (end > start && text[end - 1] == QChar(0x2028))
+        --end;
+    text = text.mid(start, end - start);
     cursor.insertText(text, format);
     if (!item.correctionError.isEmpty()) {
-        format.setForeground(QColor("#996b25"));
-        format.setFontPointSize(8);
+        format.setForeground(t.text);
+        format.setFont(uiFont(12));
         QString error = item.correctionError;
+        error.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
         error.replace('\r', QChar(0x2028));
         error.replace('\n', QChar(0x2028));
         cursor.insertText(QStringLiteral("\u2028纠错失败，已保留原文：") + error, format);
+    } else if (item.correcting) {
+        format.setFont(uiFont(12));
+        format.setForeground(t.text);
+        cursor.insertText(QStringLiteral("\u2028正在纠错，结果会继续更新"), format);
     }
 }
 void MainWindow::updateTranscript(const Transcript &result)
@@ -581,10 +652,8 @@ void MainWindow::updateTranscript(const Transcript &result)
     if (scroll)
         transcript_->verticalScrollBar()->setValue(transcript_->verticalScrollBar()->maximum());
     const Transcript &last = items_.last();
-    caption_->setText(last.text.isEmpty()     ? last.correcting ? QStringLiteral("纠错中…") : statusLabel_
-                      : last.text.size() > 20 ? "..." + last.text.right(20)
-                                              : last.text);
-    caption_->setStyleSheet(last.correcting ? "color:#a77713;" : "color:#111111;");
+    caption_->setText(last.text.isEmpty() ? (last.correcting ? QStringLiteral("纠错中…") : statusLabel_)
+                                          : last.text.simplified());
     caption_->setToolTip(last.text);
 }
 bool MainWindow::eventFilter(QObject *object, QEvent *event)
@@ -609,8 +678,8 @@ bool MainWindow::eventFilter(QObject *object, QEvent *event)
     if (event->type() == QEvent::MouseMove) {
         const QPoint delta = static_cast<QMouseEvent *>(event)->globalPosition().toPoint() - dragOrigin_;
         if (resizing_) {
-            const int width = qMax(280, resizeOrigin_.width() - delta.x()),
-                      height = qMax(220, resizeOrigin_.height() + delta.y());
+            const int width = qMax(360, resizeOrigin_.width() - delta.x()),
+                      height = qMax(300, resizeOrigin_.height() + delta.y());
             setGeometry(resizeOrigin_.right() - width + 1, resizeOrigin_.top(), width, height);
             return true;
         }
@@ -627,8 +696,8 @@ bool MainWindow::eventFilter(QObject *object, QEvent *event)
 void MainWindow::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    if (settingsPanel_)
-        settingsPanel_->setMaximumHeight(qMax(70, height() / 2 - 20));
+    if (resizeHandle_)
+        resizeHandle_->move(4, height() - 14);
 }
 void MainWindow::paintEvent(QPaintEvent *event)
 {
@@ -648,6 +717,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     if (closing_)
         return;
     closing_ = true;
+    showSettings(false);
     setStatus(QStringLiteral("停止中"), QStringLiteral("正在保存录音并关闭窗口"));
     session_.shutdown();
 }

@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Widgets Network Multimedia WebSockets)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Widgets Network Multimedia WebSockets Svg)
 qt_standard_project_setup()
 
 include(CTest)

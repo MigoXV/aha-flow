@@ -23,7 +23,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build qt6-base-dev qt6-multimedia-dev qt6-websockets-dev
+          sudo apt-get install -y --no-install-recommends ninja-build qt6-base-dev qt6-multimedia-dev qt6-websockets-dev qt6-svg-dev
       - name: Configure
         run: cmake --preset release
       - name: Build
@@ -51,7 +51,7 @@ jobs:
         with:
           version: '6.8.3'
           arch: win64_msvc2022_64
-          modules: qtmultimedia qtwebsockets
+          modules: qtmultimedia qtwebsockets qtsvg
           cache: true
       - name: Configure
         run: cmake -S . -B build/windows -G "Visual Studio 17 2022" -A x64 -DBUILD_TESTING=ON -DCMAKE_POLICY_VERSION_MINIMUM=3.5

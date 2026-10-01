@@ -11,7 +11,6 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QProgressBar;
-class QScrollArea;
 class QSpinBox;
 class QTextEdit;
 class QToolButton;
@@ -19,6 +18,7 @@ class QTimer;
 
 namespace aha
 {
+class SettingsWindow;
 class MainWindow final : public QWidget
 {
     Q_OBJECT
@@ -49,6 +49,8 @@ class MainWindow final : public QWidget
     void renderTranscript(int index);
     void updateElapsed();
     void toggleRecording();
+    void applyTheme();
+    void updateSessionMetadata();
     AppSettings settings_;
     QSettings store_;
     EngineClient engine_;
@@ -56,6 +58,8 @@ class MainWindow final : public QWidget
     QElapsedTimer elapsed_;
     QList<Transcript> items_;
     QString statusLabel_ = QStringLiteral("待机");
+    QString statusDetailText_, activeModel_;
+    bool activeCacheEnabled_ = true;
     QString runtimeEngine_, runtimeKey_;
     bool runtimeSelfSigned_ = false;
     bool runtimeKeyProvided_ = false;
@@ -64,15 +68,16 @@ class MainWindow final : public QWidget
     bool firstPaint_ = true;
     QPoint dragOrigin_;
     QRect resizeOrigin_;
-    QSize expandedSize_{300, 250};
-    QWidget *header_, *body_, *brand_, *resizeHandle_;
+    QSize expandedSize_{360, 420};
+    QWidget *header_, *body_, *brand_, *resizeHandle_ = nullptr;
     QLabel *dot_, *caption_, *version_, *status_, *time_, *compactTime_, *modelsError_, *historyHint_;
+    QLabel *statusDot_, *statusDetail_, *modelHint_, *cacheHint_;
     QToolButton *record_, *compactRecord_, *settingsButton_, *expandButton_;
     QComboBox *address_, *models_;
     QLineEdit *language_, *apiKey_, *correctionUrl_, *cacheDirectory_;
     QCheckBox *allowUntrusted_, *enableAha_, *enableCorrection_, *enableCache_;
     QSpinBox *sliceSeconds_;
-    QScrollArea *settingsPanel_ = nullptr;
+    SettingsWindow *settingsWindow_ = nullptr;
     QTextEdit *transcript_;
     QProgressBar *meter_;
     QTimer *modelsTimer_;

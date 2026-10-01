@@ -25,6 +25,7 @@ AppSettings AppSettings::load(QSettings &store)
     s.cache.rootDirectory = store.value("cache/directory", defaultCacheDirectory()).toString();
     s.cache.rawSliceSeconds = qBound(1, store.value("cache/sliceSeconds", 300).toInt(), 3600);
     s.recentServers = store.value("engine/recent").toStringList();
+    s.theme = store.value("ui/theme", "vallum").toString() == "abyssus" ? "abyssus" : "vallum";
     s.recentServers.removeDuplicates();
     while (s.recentServers.size() > 5)
         s.recentServers.removeLast();
@@ -45,6 +46,7 @@ void AppSettings::save(QSettings &store) const
     store.setValue("cache/enabled", cache.enabled);
     store.setValue("cache/directory", cache.rootDirectory);
     store.setValue("cache/sliceSeconds", cache.rawSliceSeconds);
+    store.setValue("ui/theme", theme);
     store.sync();
 }
 

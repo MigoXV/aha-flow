@@ -19,6 +19,7 @@ struct AppSettings {
     CacheConfig cache;
     CorrectionConfig correction;
     QStringList recentServers;
+    QString theme = QStringLiteral("vallum");
 
     static QString defaultCacheDirectory();
     static AppSettings load(QSettings &store);
