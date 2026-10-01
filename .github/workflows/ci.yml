@@ -67,6 +67,7 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'windows'
           $env:QT_LOGGING_RULES = 'qt.qpa.fonts.debug=true'
+          $env:QT_FORCE_STDERR_LOGGING = '1'
           $failedChecks = 0
           foreach ($scale in @('1', '1.25', '2')) {
             $env:QT_SCALE_FACTOR = $scale
