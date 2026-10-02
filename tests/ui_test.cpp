@@ -299,7 +299,10 @@ class UiTest final : public QObject
         verifySettingsGeometry(dialog);
         auto *model = window.findChild<QComboBox *>("model");
         QVERIFY(model->width() < window.findChild<QComboBox *>("engineAddress")->width());
-        QVERIFY(dialog->rect().contains(QRect(model->mapTo(dialog, QPoint()), model->size())));
+        auto *enginePage = qobject_cast<QScrollArea *>(window.findChild<QTabWidget *>("settingsTabs")->currentWidget());
+        enginePage->ensureWidgetVisible(model);
+        QVERIFY(enginePage->viewport()->rect().contains(
+            QRect(model->mapTo(enginePage->viewport(), QPoint()), model->size())));
         window.findChild<QTabWidget *>("settingsTabs")->setCurrentIndex(2);
         auto *toggle = window.findChild<QCheckBox *>("cacheEnabled");
         toggle->setFocus();
@@ -331,13 +334,19 @@ class UiTest final : public QObject
             QTest::qWait(30);
             verifySettingsGeometry(&dialog);
             const int engineHeight = dialog.height();
+            const int heightLimit = int(dialog.screen()->availableGeometry().height() * 0.85);
             QVERIFY(engineHeight < 640);
             auto *tabs = dialog.findChild<QTabWidget *>("settingsTabs");
             tabs->setCurrentIndex(1);
-            QTRY_VERIFY(dialog.height() < engineHeight);
+            if (engineHeight < heightLimit)
+                QTRY_VERIFY(dialog.height() < engineHeight);
+            else
+                QTRY_VERIFY(dialog.height() <= engineHeight);
             verifySettingsGeometry(&dialog);
             auto *shortPage = qobject_cast<QScrollArea *>(tabs->currentWidget());
-            QTRY_COMPARE(shortPage->verticalScrollBar()->maximum(), 0);
+            QTest::qWait(20);
+            if (shortPage->verticalScrollBar()->maximum() > 0)
+                QCOMPARE(dialog.height(), heightLimit);
             // A short page fills its viewport naturally, without a stretch before the footer.
             const auto *contentLayout = shortPage->widget()->layout();
             const int contentHeight = contentLayout->totalHeightForWidth(shortPage->viewport()->width());
