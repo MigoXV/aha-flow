@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=aha-flow
+GenericName=Speech Transcription
+GenericName[zh_CN]=语音转写
+Comment=Streaming speech transcription
+Comment[zh_CN]=实时语音转写客户端
+Exec="@CMAKE_INSTALL_FULL_BINDIR@/aha-flow"
+Icon=aha-flow
+Terminal=false
+Categories=AudioVideo;Audio;
+StartupWMClass=aha-flow

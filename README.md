@@ -187,6 +187,8 @@ Windows 还通过原生 `windows` 平台验证 100%、125%、200% 缩放，上�
 
 Linux 包需要目标机器安装兼容版本的 Qt 运行库，当前不是 AppImage。Windows 解压后运行 `bin/aha-flow.exe`。音频依赖的许可证随包附在 `share/aha-flow/licenses`。
 
+应用图标沿用「苍渊·白垣」配色，将字母 a、语音波形与流动尾笔结合；矢量源文件位于 `src/app/assets/aha-flow.svg`。窗口图标内置 16–512px PNG，Windows EXE 内嵌多尺寸 ICO。Linux 包携带桌面入口及 hicolor 图标；如需安装到用户应用菜单，先以 `cmake --preset release -DCMAKE_INSTALL_PREFIX="$HOME/.local"` 配置，再构建并执行 `cmake --install build/release --component Runtime`。仅解压并直接运行时，窗口仍使用内置图标。
+
 本机打包：
 
 ```bash

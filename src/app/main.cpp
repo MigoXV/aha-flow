@@ -5,6 +5,7 @@
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QJsonDocument>
+#include <QIcon>
 #include <QSettings>
 #include <QTextStream>
 #include <QTimer>
@@ -27,6 +28,11 @@ int main(int argc, char *argv[])
     else {
         app = std::make_unique<QApplication>(argc, argv);
         QApplication::setFont(aha::uiFont());
+        QIcon icon;
+        for (const int size : {16, 24, 32, 48, 64, 128, 256, 512})
+            icon.addFile(QStringLiteral(":/aha/app/aha-flow-%1.png").arg(size), QSize(size, size));
+        QApplication::setWindowIcon(icon);
+        QApplication::setDesktopFileName(QStringLiteral("aha-flow"));
     }
     QCoreApplication::setApplicationName("aha-flow");
     QCoreApplication::setApplicationVersion(AHA_FLOW_VERSION);
