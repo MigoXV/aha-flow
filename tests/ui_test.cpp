@@ -1,4 +1,5 @@
 #include "ui/main_window.h"
+#include "ui/settings_window.h"
 #include "ui/theme.h"
 #include <QCheckBox>
 #include <QAbstractTextDocumentLayout>
@@ -16,6 +17,9 @@
 #include <QPushButton>
 #include <QRawFont>
 #include <QScrollBar>
+#include <QScrollArea>
+#include <QScreen>
+#include <QLayout>
 #include <QSignalSpy>
 #include <QSpinBox>
 #include <QTemporaryDir>
@@ -128,10 +132,10 @@ class UiTest final : public QObject
                      expected.family());
         }
         const auto screenshot = window.grab();
-        QCOMPARE(window.size(), QSize(360, 420));
-        QCOMPARE(dialog->size(), QSize(480, 640));
+        QCOMPARE(window.size(), QSize(360, 360));
+        verifySettingsGeometry(dialog);
         QCOMPARE(screenshot.size(),
-                 QSize(qRound(360 * screenshot.devicePixelRatio()), qRound(420 * screenshot.devicePixelRatio())));
+                 QSize(qRound(360 * screenshot.devicePixelRatio()), qRound(360 * screenshot.devicePixelRatio())));
         const QString screenshots = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
         if (!screenshots.isEmpty()) {
             QVERIFY(QDir().mkpath(screenshots));
@@ -152,17 +156,17 @@ class UiTest final : public QObject
         aha::MainWindow window(settings, false);
         window.show();
         QTest::qWait(30);
-        QCOMPARE(window.size(), QSize(360, 420));
+        QCOMPARE(window.size(), QSize(360, 360));
         window.resize(410, 350);
         window.toggleCompact();
-        QCOMPARE(window.size(), QSize(360, 64));
+        QCOMPARE(window.size(), QSize(360, 48));
         window.toggleCompact();
         QCOMPARE(window.size(), QSize(410, 350));
         window.showSettings(true);
         auto *dialog = window.findChild<QDialog *>("settingsDialog");
         QVERIFY(dialog->isWindow());
         QVERIFY(dialog->isVisible());
-        QCOMPARE(dialog->size(), QSize(480, 640));
+        verifySettingsGeometry(dialog);
         QCOMPARE(window.size(), QSize(410, 350));
         window.findChild<QTabWidget *>("settingsTabs")->setCurrentIndex(2);
         window.findChild<QCheckBox *>("cacheEnabled")->setChecked(false);
@@ -188,7 +192,7 @@ class UiTest final : public QObject
         const QString screenshots = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
         if (!screenshots.isEmpty()) {
             QDir().mkpath(screenshots);
-            window.resize(360, 420);
+            window.resize(360, 360);
             window.session()->transcriptChanged(
                 {"one", "今天先确认两个调整方向。\n缓存目录可以在设置里调整。", true, false, false, {}});
             window.session()->transcriptChanged(
@@ -292,9 +296,10 @@ class UiTest final : public QObject
         window.showSettings(true);
         auto *dialog = window.findChild<QDialog *>("settingsDialog");
         QTest::qWait(20);
-        QCOMPARE(dialog->size(), QSize(480, 640));
+        verifySettingsGeometry(dialog);
         auto *model = window.findChild<QComboBox *>("model");
-        QVERIFY(model->width() < 300);
+        QVERIFY(model->width() < window.findChild<QComboBox *>("engineAddress")->width());
+        QVERIFY(dialog->rect().contains(QRect(model->mapTo(dialog, QPoint()), model->size())));
         window.findChild<QTabWidget *>("settingsTabs")->setCurrentIndex(2);
         auto *toggle = window.findChild<QCheckBox *>("cacheEnabled");
         toggle->setFocus();
@@ -303,13 +308,71 @@ class UiTest final : public QObject
         QSettings store;
         QVERIFY(!aha::AppSettings::load(store).cache.enabled);
         auto *directory = window.findChild<QLineEdit *>("cacheDirectory");
+        QTest::qWait(20);
+        const QSize cacheSize = dialog->size();
         const QString path = settingsDirectory_.path() + "/" + QString(300, QLatin1Char('a'));
         directory->setText(path);
         QCOMPARE(directory->toolTip(), path);
-        QCOMPARE(dialog->size(), QSize(480, 640));
+        QTest::qWait(20);
+        QCOMPARE(dialog->size(), cacheSize);
+        verifySettingsGeometry(dialog);
         QTest::keyClick(dialog, Qt::Key_Escape);
         QVERIFY(!dialog->isVisible());
         QVERIFY(window.isVisible());
+    }
+    void settingsFollowContentAndKeepFooterVisible()
+    {
+        aha::initializeUiResources();
+        for (const QString &theme : {QStringLiteral("vallum"), QStringLiteral("abyssus")}) {
+            aha::AppSettings settings;
+            settings.theme = theme;
+            aha::SettingsWindow dialog(settings, nullptr);
+            dialog.show();
+            QTest::qWait(30);
+            verifySettingsGeometry(&dialog);
+            const int engineHeight = dialog.height();
+            QVERIFY(engineHeight < 640);
+            auto *tabs = dialog.findChild<QTabWidget *>("settingsTabs");
+            tabs->setCurrentIndex(1);
+            QTRY_VERIFY(dialog.height() < engineHeight);
+            verifySettingsGeometry(&dialog);
+            auto *shortPage = qobject_cast<QScrollArea *>(tabs->currentWidget());
+            QTRY_COMPARE(shortPage->verticalScrollBar()->maximum(), 0);
+            // A short page fills its viewport naturally, without a stretch before the footer.
+            const auto *contentLayout = shortPage->widget()->layout();
+            const int contentHeight = contentLayout->totalHeightForWidth(shortPage->viewport()->width());
+            QVERIFY(shortPage->viewport()->height() <= contentHeight + 2);
+            for (int tab : {2, 3}) {
+                tabs->setCurrentIndex(tab);
+                QTest::qWait(20);
+                QVERIFY(dialog.height() <= engineHeight);
+                verifySettingsGeometry(&dialog);
+            }
+            tabs->setCurrentIndex(0);
+            QTRY_COMPARE(dialog.height(), engineHeight);
+            auto *error = dialog.controls().modelsError;
+            error->setText(QStringLiteral("无法获取模型列表，请检查服务地址。\n").repeated(100));
+            error->show();
+            auto *enginePage = qobject_cast<QScrollArea *>(tabs->currentWidget());
+            QTRY_VERIFY(enginePage->verticalScrollBar()->maximum() > 0);
+            QTRY_COMPARE(dialog.height(), int(dialog.screen()->availableGeometry().height() * 0.85));
+            verifySettingsGeometry(&dialog);
+            enginePage->ensureWidgetVisible(dialog.controls().enableAha);
+            const QRect toggleBounds(dialog.controls().enableAha->mapTo(enginePage->viewport(), QPoint()),
+                                     dialog.controls().enableAha->size());
+            QVERIFY(enginePage->viewport()->rect().contains(toggleBounds));
+            error->hide();
+            QTRY_COMPARE(dialog.height(), engineHeight);
+            verifySettingsGeometry(&dialog);
+            // Reopening a short tab must not retain the previous engine page's height.
+            tabs->setCurrentIndex(1);
+            QTest::qWait(20);
+            const QSize shortSize = dialog.size();
+            dialog.hide();
+            dialog.show();
+            QTest::qWait(20);
+            QCOMPARE(dialog.size(), shortSize);
+        }
     }
     void bundledIconsRenderWithoutOptionalPlugins()
     {
@@ -328,6 +391,16 @@ class UiTest final : public QObject
     }
 
   private:
+    static void verifySettingsGeometry(QDialog *dialog)
+    {
+        QCOMPARE(dialog->width(), 480);
+        QVERIFY(dialog->height() <= int(dialog->screen()->availableGeometry().height() * 0.85));
+        auto *footer = dialog->findChild<QWidget *>("settingsFooter");
+        QVERIFY(footer);
+        QVERIFY(footer->isVisible());
+        const QRect bounds(footer->mapTo(dialog, QPoint()), footer->size());
+        QVERIFY(dialog->rect().contains(bounds));
+    }
     QTemporaryDir settingsDirectory_;
 };
 QTEST_MAIN(UiTest)

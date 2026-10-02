@@ -74,7 +74,7 @@ jobs:
             $directory = Join-Path $env:GITHUB_WORKSPACE "build/windows/ui-screenshots/$scale"
             New-Item -ItemType Directory -Force -Path $directory | Out-Null
             $env:AHA_FLOW_SCREENSHOT_DIR = $directory
-            $arguments = @('fontsSurviveStylingAndDpi', 'compactSettingsAndTranscript', '-o', "`"$directory/test-results.txt,txt`"")
+            $arguments = @('fontsSurviveStylingAndDpi', 'compactSettingsAndTranscript', 'settingsFollowContentAndKeepFooterVisible', 'keyboardSettingsAndLongFields', '-o', "`"$directory/test-results.txt,txt`"")
             $process = Start-Process ./build/windows/Release/aha_ui_tests.exe -ArgumentList $arguments -NoNewWindow -PassThru -RedirectStandardError "$directory/font-engine.log"
             if (-not $process.WaitForExit(40000)) {
               Stop-Process -Id $process.Id -Force

@@ -68,7 +68,7 @@ class MainWindow final : public QWidget
     bool firstPaint_ = true;
     QPoint dragOrigin_;
     QRect resizeOrigin_;
-    QSize expandedSize_{360, 420};
+    QSize expandedSize_{360, 360};
     QWidget *header_, *body_, *brand_, *resizeHandle_ = nullptr;
     QLabel *dot_, *caption_, *version_, *status_, *time_, *compactTime_, *modelsError_, *historyHint_;
     QLabel *statusDot_, *statusDetail_, *modelHint_, *cacheHint_;

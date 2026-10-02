@@ -69,8 +69,8 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     shell->setObjectName("shell");
     outer->addWidget(shell);
     auto *layout = new QVBoxLayout(shell);
-    layout->setContentsMargins(15, 15, 15, 15);
-    layout->setSpacing(16);
+    layout->setContentsMargins(11, 11, 11, 11);
+    layout->setSpacing(8);
     header_ = new QWidget(shell);
     header_->setFixedHeight(32);
     auto *headerLayout = new QHBoxLayout(header_);
@@ -124,7 +124,7 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     body_ = new QWidget(shell);
     auto *bodyLayout = new QVBoxLayout(body_);
     bodyLayout->setContentsMargins(0, 0, 0, 0);
-    bodyLayout->setSpacing(16);
+    bodyLayout->setSpacing(8);
     auto *controls = new QHBoxLayout;
     controls->setSpacing(8);
     statusDot_ = new QLabel(body_);
@@ -193,7 +193,7 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     record_->setProperty("primary", true);
     record_->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     record_->setFont(uiFont(14, true));
-    record_->setFixedSize(128, 40);
+    record_->setFixedSize(128, 32);
     actions->addWidget(record_);
     footer->addLayout(actions);
     bodyLayout->addLayout(footer);
@@ -418,6 +418,8 @@ void MainWindow::showSettings(bool visible)
 {
     if (visible) {
         if (!settingsWindow_->isVisible()) {
+            settingsWindow_->setScreen(screen());
+            settingsWindow_->fitToContents();
             const QRect available = screen()->availableGeometry();
             settingsWindow_->move(
                 qMax(available.left(), qMin(geometry().right() + 16, available.right() - settingsWindow_->width() + 1)),
@@ -436,15 +438,17 @@ void MainWindow::toggleCompact()
 {
     const QRect old = geometry();
     compact_ = !compact_;
+    auto *shellLayout = findChild<QFrame *>("shell")->layout();
+    shellLayout->setContentsMargins(11, compact_ ? 7 : 11, 11, compact_ ? 7 : 11);
     if (compact_) {
         expandedSize_ = size();
         body_->hide();
         brand_->hide();
         settingsButton_->hide();
         showSettings(false);
-        setMinimumSize(360, 64);
-        setMaximumHeight(64);
-        resize(360, 64);
+        setMinimumSize(360, 48);
+        setMaximumHeight(48);
+        resize(360, 48);
     } else {
         setMaximumHeight(QWIDGETSIZE_MAX);
         setMinimumSize(360, 300);

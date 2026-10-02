@@ -177,7 +177,7 @@ QString themeStyleSheet(bool dark)
         QComboBox QAbstractItemView { background: @surface; selection-background-color: @hover; color: @text; }
         QTabWidget::pane { border: 0; }
         QTabBar { border-bottom: 1px solid @border; }
-        QTabBar::tab { color: @secondary; border-bottom: 2px solid transparent; padding: 0 0 14px 0;
+        QTabBar::tab { color: @secondary; border-bottom: 2px solid transparent; padding: 0 0 6px 0;
                         margin-right: 24px; min-height: 24px; }
         QTabBar::tab:selected { color: @text; border-bottom-color: @strongAccent; }
         QTabBar::tab:focus { background: @hover; }
