@@ -37,9 +37,9 @@ endforeach()
 set(scanner "@AHA_SYSTEM_LIBDIR@/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner")
 file(INSTALL "${scanner}" DESTINATION "${root}/libexec" TYPE PROGRAM)
 
-# OpenSSL/ALSA 可能由插件动态加载，显式作为依赖扫描入口。
+# OpenSSL 由 TLS 插件动态加载，显式作为依赖扫描入口。
 set(extra_libraries "@AHA_SYSTEM_LIBDIR@/libssl.so.3"
-    "@AHA_SYSTEM_LIBDIR@/libcrypto.so.3" "@AHA_SYSTEM_LIBDIR@/libasound.so.2")
+    "@AHA_SYSTEM_LIBDIR@/libcrypto.so.3")
 file(GET_RUNTIME_DEPENDENCIES
     EXECUTABLES "${root}/@CMAKE_INSTALL_BINDIR@/aha-flow" "${scanner}"
     LIBRARIES ${extra_libraries}
