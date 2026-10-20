@@ -16,6 +16,9 @@ jobs:
   linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,7 +48,8 @@ jobs:
               pulseaudio --start --exit-idle-time=-1 --load="module-native-protocol-unix socket=/tmp/aha-flow-pulse.sock auth-anonymous=1"
               export PULSE_SERVER=unix:/tmp/aha-flow-pulse.sock
               pactl load-module module-null-sink sink_name=aha_test
-              pactl set-default-source aha_test.monitor
+              pactl load-module module-remap-source master=aha_test.monitor source_name=aha_input
+              pactl set-default-source aha_input
               export AHA_TEST_AUDIO=1
               bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe
             ' 2>&1 | tee build/release/package-test.log

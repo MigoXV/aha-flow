@@ -29,6 +29,7 @@ unset LD_LIBRARY_PATH
 cd /
 "$app/aha-flow" --version
 LD_LIBRARY_PATH="$app/lib" QT_PLUGIN_PATH="$app/plugins" QT_MEDIA_BACKEND=gstreamer \
+    G_DEBUG=fatal-criticals \
     GST_PLUGIN_SYSTEM_PATH_1_0="$app/lib/gstreamer-1.0" \
     GST_PLUGIN_SCANNER_1_0="$app/libexec/gst-plugin-scanner" \
     timeout 20 "$probe"

@@ -23,9 +23,10 @@ foreach(required platforms/libqxcb.so platforms/libqwayland-generic.so
     endif()
 endforeach()
 
-# 本应用只需采集 PCM；携带音频相关 GStreamer 插件，不部署视频编解码插件集。
+# 本应用只需采集 PCM；携带音频插件和 Qt 后端初始化需要的 videoconvert，
+# 不部署视频编解码插件集。
 foreach(plugin coreelements typefindfunctions app audioconvert audioresample
-        autodetect pulseaudio playback volume rawparse)
+        autodetect pulseaudio playback volume rawparse videoconvertscale)
     set(path "@AHA_SYSTEM_LIBDIR@/gstreamer-1.0/libgst${plugin}.so")
     if(NOT EXISTS "${path}")
         message(FATAL_ERROR "Missing GStreamer plugin: ${path}")
