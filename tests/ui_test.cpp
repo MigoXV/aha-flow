@@ -14,6 +14,7 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QRawFont>
 #include <QScrollBar>
@@ -67,9 +68,13 @@ class UiTest final : public QObject
         QCOMPARE(expected.hintingPreference(), QFont::PreferDefaultHinting);
 #ifdef Q_OS_WIN
         const auto installed = QFontDatabase::families();
-        if (installed.contains(QStringLiteral("Microsoft YaHei UI"), Qt::CaseInsensitive))
+        if (!installed.contains(QStringLiteral("Noto Sans SC"), Qt::CaseInsensitive) &&
+            !installed.contains(QStringLiteral("Noto Sans CJK SC"), Qt::CaseInsensitive) &&
+            !installed.contains(QStringLiteral("Source Han Sans SC"), Qt::CaseInsensitive) &&
+            installed.contains(QStringLiteral("Microsoft YaHei UI"), Qt::CaseInsensitive))
             QCOMPARE(expected.family().toLower(), QStringLiteral("microsoft yahei ui"));
-        if (installed.contains(QStringLiteral("Segoe UI"), Qt::CaseInsensitive))
+        if (!installed.contains(QStringLiteral("Inter"), Qt::CaseInsensitive) &&
+            installed.contains(QStringLiteral("Segoe UI"), Qt::CaseInsensitive))
             QCOMPARE(aha::uiFont(12, false, true).family().toLower(), QStringLiteral("segoe ui"));
 #endif
         if (!hasChinese)
@@ -132,10 +137,10 @@ class UiTest final : public QObject
                      expected.family());
         }
         const auto screenshot = window.grab();
-        QCOMPARE(window.size(), QSize(360, 360));
+        QCOMPARE(window.size(), QSize(360, 300));
         verifySettingsGeometry(dialog);
         QCOMPARE(screenshot.size(),
-                 QSize(qRound(360 * screenshot.devicePixelRatio()), qRound(360 * screenshot.devicePixelRatio())));
+                 QSize(qRound(360 * screenshot.devicePixelRatio()), qRound(300 * screenshot.devicePixelRatio())));
         const QString screenshots = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
         if (!screenshots.isEmpty()) {
             QVERIFY(QDir().mkpath(screenshots));
@@ -156,10 +161,16 @@ class UiTest final : public QObject
         aha::MainWindow window(settings, false);
         window.show();
         QTest::qWait(30);
-        QCOMPARE(window.size(), QSize(360, 360));
+        QCOMPARE(window.size(), QSize(360, 232));
+        const QString capture = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+        if (!capture.isEmpty()) {
+            QDir().mkpath(capture);
+            window.session()->started();
+            window.grab().save(QDir(capture).filePath("waiting.png"));
+        }
         window.resize(410, 350);
         window.toggleCompact();
-        QCOMPARE(window.size(), QSize(360, 48));
+        QCOMPARE(window.size(), QSize(360, 44));
         window.toggleCompact();
         QCOMPARE(window.size(), QSize(410, 350));
         window.showSettings(true);
@@ -188,11 +199,11 @@ class UiTest final : public QObject
         QCOMPARE(window.findChild<QTextEdit *>("transcript")->toPlainText(),
                  QStringLiteral("第一行\n第二行\n第二轮更新"));
         window.session()->statusChanged(QStringLiteral("语义轮次未结束"), {});
-        QCOMPARE(window.findChild<QLabel *>("recognitionStatus")->text(), QStringLiteral("语义轮次未结束"));
+        QCOMPARE(window.findChild<QLabel *>("recognitionStatus")->text(), QStringLiteral("等待续说"));
         const QString screenshots = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
         if (!screenshots.isEmpty()) {
             QDir().mkpath(screenshots);
-            window.resize(360, 360);
+            window.resize(360, 300);
             window.session()->transcriptChanged(
                 {"one", "今天先确认两个调整方向。\n缓存目录可以在设置里调整。", true, false, false, {}});
             window.session()->transcriptChanged(
@@ -242,8 +253,8 @@ class UiTest final : public QObject
         QCOMPARE(document->blockCount(), 2);
         const auto first = document->firstBlock();
         const auto second = first.next();
-        QCOMPARE(first.blockFormat().topMargin(), 0.0);
-        QCOMPARE(first.blockFormat().bottomMargin(), 0.0);
+        QCOMPARE(first.blockFormat().topMargin(), 18.0);
+        QCOMPARE(first.blockFormat().bottomMargin(), 6.0);
         QCOMPARE(first.blockFormat().lineHeight(), 22.0);
         QCOMPARE(first.blockFormat().lineHeightType(), int(QTextBlockFormat::FixedHeight));
         const QRectF firstBounds = document->documentLayout()->blockBoundingRect(first);
@@ -254,7 +265,7 @@ class UiTest final : public QObject
         QCOMPARE(lastLine.y() - firstLine.y(), 22.0);
         const qreal lastBaseline = firstBounds.top() + lastLine.y() + lastLine.ascent();
         const qreal nextBaseline = secondBounds.top() + nextLine.y() + nextLine.ascent();
-        QCOMPARE(nextBaseline - lastBaseline, 22.0);
+        QCOMPARE(nextBaseline - lastBaseline, 40.0);
         QTextCursor selection(document);
         selection.setPosition(0);
         selection.setPosition(3, QTextCursor::KeepAnchor);
@@ -334,37 +345,20 @@ class UiTest final : public QObject
             QTest::qWait(30);
             verifySettingsGeometry(&dialog);
             const int engineHeight = dialog.height();
-            const int heightLimit = int(dialog.screen()->availableGeometry().height() * 0.85);
-            QVERIFY(engineHeight < 640);
+            QCOMPARE(engineHeight, qMin(360, int(dialog.screen()->availableGeometry().height() * 0.85)));
             auto *tabs = dialog.findChild<QTabWidget *>("settingsTabs");
-            tabs->setCurrentIndex(1);
-            if (engineHeight < heightLimit)
-                QTRY_VERIFY(dialog.height() < engineHeight);
-            else
-                QTRY_VERIFY(dialog.height() <= engineHeight);
-            verifySettingsGeometry(&dialog);
-            auto *shortPage = qobject_cast<QScrollArea *>(tabs->currentWidget());
-            QTest::qWait(20);
-            if (shortPage->verticalScrollBar()->maximum() > 0)
-                QCOMPARE(dialog.height(), heightLimit);
-            // A short page fills its viewport naturally, without a stretch before the footer.
-            const auto *contentLayout = shortPage->widget()->layout();
-            const int contentHeight = contentLayout->totalHeightForWidth(shortPage->viewport()->width());
-            QVERIFY(shortPage->viewport()->height() <= contentHeight + 2);
-            for (int tab : {2, 3}) {
+            for (int tab : {1, 2, 3, 0}) {
                 tabs->setCurrentIndex(tab);
                 QTest::qWait(20);
-                QVERIFY(dialog.height() <= engineHeight);
+                QCOMPARE(dialog.height(), engineHeight);
                 verifySettingsGeometry(&dialog);
             }
-            tabs->setCurrentIndex(0);
-            QTRY_COMPARE(dialog.height(), engineHeight);
             auto *error = dialog.controls().modelsError;
             error->setText(QStringLiteral("无法获取模型列表，请检查服务地址。\n").repeated(100));
             error->show();
             auto *enginePage = qobject_cast<QScrollArea *>(tabs->currentWidget());
             QTRY_VERIFY(enginePage->verticalScrollBar()->maximum() > 0);
-            QTRY_COMPARE(dialog.height(), int(dialog.screen()->availableGeometry().height() * 0.85));
+            QTRY_COMPARE(dialog.height(), engineHeight);
             verifySettingsGeometry(&dialog);
             enginePage->ensureWidgetVisible(dialog.controls().enableAha);
             const QRect toggleBounds(dialog.controls().enableAha->mapTo(enginePage->viewport(), QPoint()),
@@ -382,6 +376,76 @@ class UiTest final : public QObject
             QTest::qWait(20);
             QCOMPARE(dialog.size(), shortSize);
         }
+    }
+    void stableChromeAndEdgeResize()
+    {
+        aha::AppSettings settings;
+        settings.engine.baseUrl = QStringLiteral("http://127.0.0.1:1");
+        aha::MainWindow window(settings, false);
+        window.show();
+        QTest::qWait(30);
+        QCOMPARE(window.size(), QSize(360, 232));
+        auto *clock = window.findChild<QLabel *>("sessionTime");
+        auto *record = window.findChild<QToolButton *>("recordButton");
+        QCOMPARE(clock->width(), 36);
+        QCOMPARE(record->size(), QSize(104, 36));
+        const QRect clockBounds = clock->geometry();
+        const QRect actionsBounds(record->mapTo(&window, QPoint()), record->size());
+        for (const QString &state :
+             {QStringLiteral("连接中"), QStringLiteral("等待中"), QStringLiteral("语义轮次未结束"),
+              QStringLiteral("错误"), QStringLiteral("待机")}) {
+            window.session()->statusChanged(state,
+                                            state == QStringLiteral("错误") ? QStringLiteral("服务不可达") : QString());
+            QTest::qWait(5);
+            QCOMPARE(window.size(), QSize(360, 232));
+            QCOMPARE(clock->geometry(), clockBounds);
+            QCOMPARE(QRect(record->mapTo(&window, QPoint()), record->size()), actionsBounds);
+        }
+        window.session()->transcriptChanged({"first", "实时内容", false, true, false, {}});
+        QCOMPARE(window.size(), QSize(360, 300));
+        for (int i = 0; i < 40; ++i)
+            window.session()->transcriptChanged(
+                {QString::number(i), "转写正文持续增长但窗口不跳高。", true, false, false, {}});
+        QCOMPARE(window.size(), QSize(360, 300));
+        auto *transcript = window.findChild<QTextEdit *>("transcript");
+        QTest::qWait(20);
+        QVERIFY(transcript->verticalScrollBar()->maximum() > 0);
+        if (QGuiApplication::platformName() == QStringLiteral("offscreen")) {
+            const auto drag = [&window](const char *name, const QPoint &delta) {
+                auto *handle = window.findChild<QWidget *>(name);
+                QVERIFY(handle && handle->isVisible());
+                const QPoint local = handle->rect().center();
+                const QPoint global = handle->mapToGlobal(local);
+                QMouseEvent press(QEvent::MouseButtonPress, local, global, Qt::LeftButton, Qt::LeftButton,
+                                  Qt::NoModifier);
+                QApplication::sendEvent(handle, &press);
+                QMouseEvent move(QEvent::MouseMove, local + delta, global + delta, Qt::NoButton, Qt::LeftButton,
+                                 Qt::NoModifier);
+                QApplication::sendEvent(handle, &move);
+                QMouseEvent release(QEvent::MouseButtonRelease, local + delta, global + delta, Qt::LeftButton,
+                                    Qt::NoButton, Qt::NoModifier);
+                QApplication::sendEvent(handle, &release);
+            };
+            const int right = window.geometry().right();
+            drag("resizeLeft", QPoint(-40, 0));
+            QCOMPARE(window.width(), 400);
+            QCOMPARE(window.geometry().right(), right);
+            const int left = window.x();
+            drag("resizeRight", QPoint(30, 0));
+            QCOMPARE(window.width(), 430);
+            QCOMPARE(window.x(), left);
+            drag("resizeBottom", QPoint(0, 40));
+            QCOMPARE(window.height(), 340);
+            drag("resizeBottom", QPoint(0, -1000));
+            QCOMPARE(window.height(), 220);
+        }
+        const QSize manual = window.size();
+        window.toggleCompact();
+        QCOMPARE(window.size(), QSize(360, 44));
+        window.toggleCompact();
+        QCOMPARE(window.size(), manual);
+        window.session()->transcriptChanged({"more", "继续转写", true, false, false, {}});
+        QCOMPARE(window.size(), manual);
     }
     void bundledIconsRenderWithoutOptionalPlugins()
     {

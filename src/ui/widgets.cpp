@@ -3,6 +3,8 @@
 
 #include <QPainter>
 #include <QSvgRenderer>
+#include <QTextBlock>
+#include <QTextCursor>
 
 namespace aha
 {
@@ -11,7 +13,7 @@ void IconComboBox::paintEvent(QPaintEvent *event)
     QComboBox::paintEvent(event);
     QPainter painter(this);
     QSvgRenderer renderer(assetPath("chevron", property("dark").toBool()));
-    renderer.render(&painter, QRectF(width() - 36, (height() - 20) / 2.0, 20, 20));
+    renderer.render(&painter, QRectF(width() - 26, (height() - 16) / 2.0, 16, 16));
 }
 
 void ElidedLabel::paintEvent(QPaintEvent *)
@@ -21,6 +23,38 @@ void ElidedLabel::paintEvent(QPaintEvent *)
     painter.setFont(font());
     painter.drawText(contentsRect(), Qt::AlignVCenter | Qt::AlignLeft,
                      fontMetrics().elidedText(text(), Qt::ElideLeft, contentsRect().width()));
+}
+
+void SessionTimeLabel::paintEvent(QPaintEvent *)
+{
+    QPainter p(this);
+    p.setPen(palette().color(QPalette::WindowText));
+    p.setFont(font());
+    const QString value = text();
+    const qreal digitWidth = value.size() <= 5 ? 8.0 : 32.0 / (value.size() - 1);
+    qreal x = 0;
+    for (const QChar c : value) {
+        const qreal cell = c == QLatin1Char(':') ? 4.0 : digitWidth;
+        p.drawText(QRectF(x, 0, cell, height()), Qt::AlignCenter, QString(c));
+        x += cell;
+    }
+}
+
+void TranscriptView::paintEvent(QPaintEvent *event)
+{
+    QTextEdit::paintEvent(event);
+    QPainter p(viewport());
+    p.setFont(uiFont(11));
+    p.setPen(theme(property("dark").toBool()).secondaryText);
+    for (QTextBlock block = document()->begin(); block.isValid(); block = block.next()) {
+        const QRect line = cursorRect(QTextCursor(block));
+        if (line.top() > viewport()->height() + 18)
+            break;
+        if (line.bottom() < 0 || block.text().isEmpty())
+            continue;
+        p.drawText(QRect(0, line.top() - 18, viewport()->width(), 16), Qt::AlignVCenter,
+                   block.userState() == 1 ? QStringLiteral("实时转写") : QStringLiteral("已确认"));
+    }
 }
 
 ToggleSwitch::ToggleSwitch(const QString &label, QWidget *parent) : QCheckBox(parent)
@@ -44,11 +78,11 @@ void ToggleSwitch::paintEvent(QPaintEvent *)
     if (!isEnabled())
         painter.setOpacity(0.55);
     QSvgRenderer renderer(assetPath(isChecked() ? "toggle-on" : "toggle-off", dark));
-    renderer.render(&painter, QRectF(2, 6, 36, 20));
+    renderer.render(&painter, QRectF(4, 8, 32, 16));
     if (hasFocus()) {
-        painter.setPen(QPen(theme(dark).focus, 2));
+        painter.setPen(QPen(theme(dark).focus, 1.5));
         painter.setBrush(Qt::NoBrush);
-        painter.drawRoundedRect(QRectF(1, 1, 38, 30), 6, 6);
+        painter.drawRoundedRect(QRectF(1, 1, 38, 30), 3, 3);
     }
 }
 
@@ -57,7 +91,7 @@ ThemeChoice::ThemeChoice(bool darkChoice, QWidget *parent) : QPushButton(parent)
     setObjectName(darkChoice ? "themeAbyssus" : "themeVallum");
     setAccessibleName(darkChoice ? QStringLiteral("苍渊，深色主题") : QStringLiteral("白垣，浅色主题"));
     setCheckable(true);
-    setFixedHeight(88);
+    setFixedHeight(64);
     setMinimumWidth(190);
     setCursor(Qt::PointingHandCursor);
 }
@@ -69,22 +103,22 @@ void ThemeChoice::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     p.setBrush(underMouse() ? t.hover : t.surface);
-    p.setPen(QPen(isChecked() || hasFocus() ? t.focus : t.border, isChecked() || hasFocus() ? 2 : 1));
-    p.drawRoundedRect(QRectF(1, 1, width() - 2, height() - 2), 8, 8);
+    p.setPen(QPen(isChecked() || hasFocus() ? t.focus : t.border, hasFocus() ? 1.5 : 1));
+    p.drawRoundedRect(QRectF(1, 1, width() - 2, height() - 2), 4, 4);
     p.setBrush(preview.background);
-    p.setPen(QPen(preview.border, 1));
-    p.drawRoundedRect(QRectF(16, 24, 32, 40), 6, 6);
-    p.fillRect(QRect(20, 30, 24, 3), preview.secondaryText);
-    p.fillRect(QRect(20, 37, 20, 2), preview.accent);
-    p.setFont(uiFont(14, true));
+    p.setPen(Qt::NoPen);
+    p.drawRoundedRect(QRectF(16, 12, 32, 40), 3, 3);
+    p.fillRect(QRect(20, 18, 24, 3), preview.secondaryText);
+    p.fillRect(QRect(20, 25, 20, 2), preview.accent);
+    p.setFont(uiFont(12, true));
     p.setPen(t.text);
-    p.drawText(QRect(64, 23, width() - 80, 22), Qt::AlignVCenter,
+    p.drawText(QRect(64, 13, width() - 80, 18), Qt::AlignVCenter,
                darkChoice_ ? QStringLiteral("苍渊") : QStringLiteral("白垣"));
-    p.setFont(uiFont(12));
+    p.setFont(uiFont(11));
     p.setPen(t.secondaryText);
     const QString description = isChecked()   ? QStringLiteral("已选择")
                                 : darkChoice_ ? QStringLiteral("深色与微光")
                                               : QStringLiteral("米灰与青灰");
-    p.drawText(QRect(64, 49, width() - 80, 18), Qt::AlignVCenter, description);
+    p.drawText(QRect(64, 33, width() - 80, 18), Qt::AlignVCenter, description);
 }
 } // namespace aha

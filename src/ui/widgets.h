@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QTextEdit>
 
 namespace aha
 {
@@ -20,6 +21,26 @@ class ElidedLabel final : public QLabel
 {
   public:
     using QLabel::QLabel;
+
+  protected:
+    void paintEvent(QPaintEvent *event) override;
+};
+
+// Fixed digit cells keep the session clock stable even with proportional fonts.
+class SessionTimeLabel final : public QLabel
+{
+  public:
+    using QLabel::QLabel;
+
+  protected:
+    void paintEvent(QPaintEvent *event) override;
+};
+
+// Draw state labels outside selectable text, preserving clean transcript copying.
+class TranscriptView final : public QTextEdit
+{
+  public:
+    using QTextEdit::QTextEdit;
 
   protected:
     void paintEvent(QPaintEvent *event) override;

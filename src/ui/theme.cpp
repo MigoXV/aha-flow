@@ -61,38 +61,13 @@ QFont uiFont(int pixels, bool medium, bool latin)
 {
     // Stylesheets can retain only the primary family. Resolve an installed face first
     // so missing Noto fonts do not turn into serif substitutes on Windows.
-    static const QString chinese = installedFontFamily(
-        {
-#ifdef Q_OS_WIN
-            "Microsoft YaHei UI",
-            "微软雅黑 UI",
-            "Microsoft YaHei",
-            "微软雅黑",
-            "DengXian",
-            "等线",
-#endif
-            "Noto Sans SC",
-            "Noto Sans CJK SC",
-            "Source Han Sans SC",
-            "思源黑体",
-            "Microsoft YaHei UI",
-            "微软雅黑 UI",
-            "Microsoft YaHei",
-            "微软雅黑",
-            "DengXian",
-            "等线",
-            "PingFang SC",
-            "苹方-简",
-            "Heiti SC",
-            "黑体-简",
-            "WenQuanYi Micro Hei",
-            "WenQuanYi Zen Hei"},
-        true);
-    static const QString western = installedFontFamily({
-#ifdef Q_OS_WIN
-        "Segoe UI",
-#endif
-        "Inter", "Segoe UI", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Arial"});
+    static const QString chinese =
+        installedFontFamily({"Noto Sans SC", "Noto Sans CJK SC", "Source Han Sans SC", "思源黑体", "Microsoft YaHei UI",
+                             "微软雅黑 UI", "Microsoft YaHei", "微软雅黑", "DengXian", "等线", "PingFang SC", "苹方-简",
+                             "Heiti SC", "黑体-简", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei"},
+                            true);
+    static const QString western =
+        installedFontFamily({"Inter", "Segoe UI", "Noto Sans", "DejaVu Sans", "Liberation Sans", "Arial"});
     QFont font(latin ? western : chinese);
     font.setStyleHint(QFont::SansSerif);
     font.setPixelSize(pixels);
@@ -144,41 +119,44 @@ QString themeStyleSheet(bool dark)
     QString css = QStringLiteral(R"(
         QWidget { color: @text; background: transparent; }
         QFrame#shell, QFrame#settingsShell {
-            background: @bg; border: 1px solid @border; border-radius: 12px;
+            background: @bg; border: 1px solid @border; border-radius: 8px;
         }
         QLabel[role="caption"], QLabel#version { color: @secondary; }
-        QLabel#title { font-size: 18px; font-weight: 600; }
-        QLabel[role="heading"] { font-size: 18px; font-weight: 500; }
+        QLabel#title { font-size: 15px; font-weight: 600; }
+        QLabel[role="heading"] { font-size: 14px; font-weight: 600; }
         QFrame[role="divider"] { background: @border; border: 0; }
         QToolButton {
-            background: transparent; border: 2px solid transparent; border-radius: 6px;
+            background: transparent; border: 1px solid transparent; border-radius: 3px;
         }
         QToolButton:hover { background: @hover; }
-        QToolButton:focus { border-color: @focus; }
+        QToolButton:focus { border: 1.5px solid @focus; }
         QToolButton[primary="true"] { background: @primary; color: @onPrimary; }
         QToolButton[primary="true"]:hover { background: @primary; }
         QToolButton[primary="true"]:disabled { background: @subtle; color: @secondary; }
-        QToolButton#recordButton { border-radius: 8px; }
+        QToolButton#recordButton { border-radius: 4px; }
+        QToolButton#recordButton[primary="false"] { background: @surface; border: 1px solid @border; }
+        QToolButton#recordButton[primary="false"]:hover { background: @hover; }
+        QToolButton#recordButton:focus { border: 1.5px solid @focus; }
         QToolButton#resizeHandle { border: 0; }
         QPushButton {
-            background: @surface; border: 1px solid @border; border-radius: 8px; padding: 0 16px;
+            background: @surface; border: 1px solid @border; border-radius: 4px; padding: 0 10px;
         }
         QPushButton:hover { background: @hover; }
-        QPushButton:focus { border: 2px solid @focus; }
+        QPushButton:focus { border: 1.5px solid @focus; }
         QLineEdit, QComboBox, QSpinBox {
-            background: @surface; border: 1px solid @border; border-radius: 8px; padding: 0 16px;
+            background: @surface; border: 1px solid @border; border-radius: 4px; padding: 0 10px;
         }
-        QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 2px solid @focus; }
+        QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 1.5px solid @focus; }
         QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled { background: @subtle; color: @secondary; }
-        QComboBox { padding-right: 36px; }
+        QComboBox { padding-right: 28px; }
         QComboBox QLineEdit { background: transparent; border: 0; padding: 0; }
-        QComboBox::drop-down { border: 0; width: 36px; }
+        QComboBox::drop-down { border: 0; width: 28px; }
         QComboBox::down-arrow { image: none; width: 0; height: 0; }
         QComboBox QAbstractItemView { background: @surface; selection-background-color: @hover; color: @text; }
         QTabWidget::pane { border: 0; }
         QTabBar { border-bottom: 1px solid @border; }
-        QTabBar::tab { color: @secondary; border-bottom: 2px solid transparent; padding: 0 0 6px 0;
-                        margin-right: 24px; min-height: 24px; }
+        QTabBar::tab { color: @secondary; border-bottom: 1px solid transparent; padding: 0 0 6px 0;
+                        margin-right: 20px; min-height: 25px; }
         QTabBar::tab:selected { color: @text; border-bottom-color: @strongAccent; }
         QTabBar::tab:focus { background: @hover; }
         QTextEdit, QScrollArea { border: 0; background: transparent; padding: 0; }
@@ -188,7 +166,7 @@ QString themeStyleSheet(bool dark)
         QScrollBar::handle:vertical { background: @strongBorder; min-height: 24px; border-radius: 3px; }
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
         QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
-        QLabel#statusDetail { border-left: 2px solid @danger; padding-left: 16px; }
+        QLabel#statusDetail { border-left: 1px solid @danger; padding-left: 8px; }
     )");
     const QList<QPair<QString, QString>> values{{"@bg", t.background.name()},
                                                 {"@border", t.border.name()},

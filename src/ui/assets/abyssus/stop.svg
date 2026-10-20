@@ -1,5 +1,14 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="Frame">
-<path id="Vector" d="M6.66699 5.41699H13.333C14.0234 5.41699 14.583 5.97664 14.583 6.66699V13.333C14.583 14.0234 14.0234 14.583 13.333 14.583H6.66699C5.97664 14.583 5.41699 14.0234 5.41699 13.333V6.66699C5.41699 5.97664 5.97664 5.41699 6.66699 5.41699Z" fill="#080A0D" stroke="#080A0D" stroke-width="0.833333"/>
+<g id="Vector">
+<use xlink:href="#stroke0_0_40" fill="#E7EEF4"/>
+<mask id="stroke1_0_40" fill="white">
+<use xlink:href="#stroke0_0_40"/>
+</mask>
+<path d="M4.66667 3.5H9.33333C9.97767 3.5 10.5 4.02233 10.5 4.66667V9.33333C10.5 9.97767 9.97767 10.5 9.33333 10.5H4.66667C4.02233 10.5 3.5 9.97767 3.5 9.33333V4.66667C3.5 4.02233 4.02233 3.5 4.66667 3.5Z" stroke-width="1.16667" stroke="#E7EEF4" mask="url(#stroke1_0_40)"/>
 </g>
+</g>
+<defs>
+<path id="stroke0_0_40" d="M9.33333 3.5H4.66667C4.02233 3.5 3.5 4.02233 3.5 4.66667V9.33333C3.5 9.97767 4.02233 10.5 4.66667 10.5H9.33333C9.97767 10.5 10.5 9.97767 10.5 9.33333V4.66667C10.5 4.02233 9.97767 3.5 9.33333 3.5Z"/>
+</defs>
 </svg>

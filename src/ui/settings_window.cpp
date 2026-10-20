@@ -3,6 +3,7 @@
 #include "ui/widgets.h"
 
 #include <QButtonGroup>
+#include <QCoreApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QFrame>
@@ -30,9 +31,9 @@ namespace
 QLabel *label(const QString &text, QWidget *parent, bool caption = false)
 {
     auto *l = new QLabel(text, parent);
-    l->setFont(uiFont(caption ? 12 : 14, !caption));
+    l->setFont(uiFont(caption ? 11 : 12, !caption));
     l->setProperty("role", caption ? "caption" : "label");
-    l->setMinimumHeight(caption ? 18 : 22);
+    l->setMinimumHeight(caption ? 16 : 18);
     l->setWordWrap(true);
     return l;
 }
@@ -42,13 +43,31 @@ QWidget *field(const QString &name, QWidget *control, QWidget *parent)
     auto *group = new QWidget(parent);
     auto *layout = new QVBoxLayout(group);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(8);
+    layout->setSpacing(4);
     auto *l = label(name, group);
     l->setBuddy(control);
     control->setAccessibleName(name);
-    control->setFixedHeight(40);
+    control->setFixedHeight(32);
+    control->setFont(uiFont(12));
     layout->addWidget(l);
     layout->addWidget(control);
+    return group;
+}
+
+QWidget *inlineField(const QString &name, QWidget *control, QWidget *parent)
+{
+    auto *group = new QWidget(parent);
+    auto *layout = new QHBoxLayout(group);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    auto *l = label(name, group);
+    l->setWordWrap(false);
+    l->setBuddy(control);
+    control->setAccessibleName(name);
+    control->setFont(uiFont(12));
+    control->setFixedHeight(32);
+    layout->addWidget(l);
+    layout->addWidget(control, 1);
     return group;
 }
 
@@ -57,9 +76,9 @@ QCheckBox *preference(QVBoxLayout *layout, const QString &name, const QString &h
     auto *row = new QWidget;
     auto *horizontal = new QHBoxLayout(row);
     horizontal->setContentsMargins(0, 0, 0, 0);
-    horizontal->setSpacing(16);
+    horizontal->setSpacing(12);
     auto *copy = new QVBoxLayout;
-    copy->setSpacing(2);
+    copy->setSpacing(0);
     copy->addWidget(label(name, row));
     copy->addWidget(label(help, row, true));
     horizontal->addLayout(copy, 1);
@@ -78,8 +97,8 @@ QVBoxLayout *page(QTabWidget *tabs, const QString &title)
     scroll->setFrameShape(QFrame::NoFrame);
     auto *contents = new QWidget;
     auto *layout = new QVBoxLayout(contents);
-    layout->setContentsMargins(0, 12, 0, 0);
-    layout->setSpacing(12);
+    layout->setContentsMargins(0, 8, 0, 6);
+    layout->setSpacing(10);
     layout->setAlignment(Qt::AlignTop);
     layout->setSizeConstraint(QLayout::SetMinimumSize);
     scroll->setWidget(contents);
@@ -87,29 +106,6 @@ QVBoxLayout *page(QTabWidget *tabs, const QString &title)
     return layout;
 }
 
-QVBoxLayout *section(QVBoxLayout *pageLayout, const QString &title, bool divided = false)
-{
-    if (divided)
-        pageLayout->addSpacing(12); // Together with page spacing: 24px between sections.
-    auto *group = new QWidget;
-    auto *layout = new QVBoxLayout(group);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(12);
-    auto *heading = new QWidget(group);
-    auto *headingLayout = new QHBoxLayout(heading);
-    headingLayout->setContentsMargins(0, 0, 0, 0);
-    headingLayout->setSpacing(8);
-    auto *titleLabel = label(title, heading, true);
-    titleLabel->setFont(uiFont(12, true));
-    headingLayout->addWidget(titleLabel);
-    auto *line = new QFrame(heading);
-    line->setProperty("role", "divider");
-    line->setFixedHeight(1);
-    headingLayout->addWidget(line, 1);
-    layout->addWidget(heading);
-    pageLayout->addWidget(group);
-    return layout;
-}
 } // namespace
 
 SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : QDialog(parent)
@@ -118,7 +114,7 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     setWindowTitle(QStringLiteral("aha-flow 设置"));
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     setAttribute(Qt::WA_TranslucentBackground);
-    setFont(uiFont());
+    setFont(uiFont(12));
     setFixedWidth(480);
     auto *outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
@@ -126,36 +122,34 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     shell->setObjectName("settingsShell");
     outer->addWidget(shell);
     auto *layout = new QVBoxLayout(shell);
-    layout->setContentsMargins(15, 15, 15, 15); // 16px including the shell border.
+    layout->setContentsMargins(15, 7, 15, 7); // 16px including the shell border.
     layout->setSpacing(0);
     auto *header = new QWidget(shell);
+    header->setFixedHeight(36);
     auto *headerLayout = new QHBoxLayout(header);
     headerLayout->setContentsMargins(0, 0, 0, 0);
     headerLayout->setSpacing(8);
     auto *title = label(QStringLiteral("设置"), header);
-    title->setFont(uiFont(18, true));
+    title->setFont(uiFont(14, true));
     title->setProperty("role", "heading");
     headerLayout->addWidget(title, 1);
     auto *close = new QToolButton(header);
     close->setProperty("iconName", "close");
     close->setToolTip(QStringLiteral("关闭设置"));
     close->setAccessibleName(QStringLiteral("关闭设置"));
-    close->setIconSize(QSize(20, 20));
-    close->setFixedSize(32, 32);
+    close->setIconSize(QSize(16, 16));
+    close->setFixedSize(28, 28);
     headerLayout->addWidget(close);
     layout->addWidget(header);
-    layout->addSpacing(8);
     header->setProperty("settingsDragHandle", true);
     title->setProperty("settingsDragHandle", true);
     header->installEventFilter(this);
     title->installEventFilter(this);
     connect(close, &QToolButton::clicked, this, &QDialog::reject);
-    layout->addWidget(label(QStringLiteral("配置自动保存；识别配置在下次开始时生效。"), shell, true));
-    layout->addSpacing(12);
 
     tabs_ = new QTabWidget(shell);
     tabs_->setObjectName("settingsTabs");
-    tabs_->tabBar()->setFont(uiFont(14, true));
+    tabs_->tabBar()->setFont(uiFont(13, true));
     tabs_->setDocumentMode(true);
     tabs_->setUsesScrollButtons(false);
     tabs_->tabBar()->setDrawBase(false);
@@ -163,7 +157,7 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     layout->addWidget(tabs_, 1);
 
     auto *enginePage = page(tabs_, QStringLiteral("识别引擎"));
-    auto *engine = section(enginePage, QStringLiteral("识别服务"));
+    auto *engine = enginePage;
     controls_.address = new IconComboBox;
     controls_.address->setObjectName("engineAddress");
     controls_.address->setEditable(true);
@@ -175,18 +169,18 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     auto *pair = new QWidget;
     auto *pairLayout = new QHBoxLayout(pair);
     pairLayout->setContentsMargins(0, 0, 0, 0);
-    pairLayout->setSpacing(16);
+    pairLayout->setSpacing(12);
     controls_.models = new IconComboBox(pair);
     controls_.models->setObjectName("model");
     controls_.models->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     controls_.models->setMinimumContentsLength(12);
     controls_.models->addItem(settings.engine.model);
-    pairLayout->addWidget(field(QStringLiteral("模型"), controls_.models, pair), 1);
+    pairLayout->addWidget(inlineField(QStringLiteral("模型"), controls_.models, pair), 1);
     controls_.language = new QLineEdit(settings.engine.language, pair);
     controls_.language->setPlaceholderText(QStringLiteral("留空默认"));
     controls_.language->setToolTip(QStringLiteral("留空使用服务端默认值"));
-    auto *languageField = field(QStringLiteral("语言"), controls_.language, pair);
-    languageField->setFixedWidth(120);
+    auto *languageField = inlineField(QStringLiteral("语言"), controls_.language, pair);
+    languageField->setFixedWidth(160);
     pairLayout->addWidget(languageField);
     engine->addWidget(pair);
     controls_.modelsError = label({}, shell, true);
@@ -195,11 +189,11 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     controls_.modelsError->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     controls_.modelsError->hide();
     engine->addWidget(controls_.modelsError);
-    auto *security = section(enginePage, QStringLiteral("协议与安全"), true);
+    auto *security = enginePage;
     controls_.apiKey = new QLineEdit(settings.engine.apiKey);
     controls_.apiKey->setEchoMode(QLineEdit::Password);
     controls_.apiKey->setPlaceholderText(QStringLiteral("可选；仅用于识别引擎"));
-    security->addWidget(field(QStringLiteral("API Key"), controls_.apiKey, shell));
+    security->addWidget(inlineField(QStringLiteral("API Key"), controls_.apiKey, shell));
     controls_.allowUntrusted =
         preference(security, QStringLiteral("允许自签名证书"), QStringLiteral("仅用于你信任的局域网服务。"),
                    settings.engine.allowUntrustedCertificate);
@@ -213,7 +207,7 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     controls_.correctionUrl = new QLineEdit(settings.correction.responsesUrl);
     correction->addWidget(field(QStringLiteral("Responses API 地址"), controls_.correctionUrl, shell));
     auto *recovery = label(QStringLiteral("纠错超时、截断或请求失败时，会恢复识别原文并显示原因。"), shell, true);
-    recovery->setFont(uiFont(14));
+    recovery->setFont(uiFont(11));
     correction->addWidget(recovery);
 
     auto *cache = page(tabs_, QStringLiteral("录音缓存"));
@@ -223,7 +217,8 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     controls_.cacheDirectory = new QLineEdit(
         settings.cache.rootDirectory.isEmpty() ? AppSettings::defaultCacheDirectory() : settings.cache.rootDirectory);
     controls_.cacheDirectory->setObjectName("cacheDirectory");
-    controls_.cacheDirectory->setFixedHeight(40);
+    controls_.cacheDirectory->setFixedHeight(32);
+    controls_.cacheDirectory->setFont(uiFont(12));
     controls_.cacheDirectory->setCursorPosition(0);
     controls_.cacheDirectory->setToolTip(controls_.cacheDirectory->text());
     auto *directoryRow = new QWidget;
@@ -235,7 +230,7 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     controls_.browse = new QToolButton(directoryRow);
     controls_.browse->setProperty("iconName", "folder");
     controls_.browse->setFixedSize(32, 32);
-    controls_.browse->setIconSize(QSize(20, 20));
+    controls_.browse->setIconSize(QSize(16, 16));
     controls_.browse->setAccessibleName(QStringLiteral("选择录音缓存目录"));
     controls_.browse->setToolTip(QStringLiteral("选择录音缓存目录"));
     directoryLayout->addWidget(controls_.browse);
@@ -253,16 +248,17 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     controls_.sliceSeconds->setButtonSymbols(QAbstractSpinBox::NoButtons);
     controls_.sliceSeconds->setRange(1, 3600);
     controls_.sliceSeconds->setValue(settings.cache.rawSliceSeconds);
-    controls_.sliceSeconds->setFixedSize(112, 40);
+    controls_.sliceSeconds->setFixedSize(80, 32);
+    controls_.sliceSeconds->setFont(uiFont(12));
     duration->setFocusProxy(controls_.sliceSeconds);
     durationLayout->addWidget(controls_.sliceSeconds);
     durationLayout->addWidget(label(QStringLiteral("秒"), duration));
     durationLayout->addWidget(label(QStringLiteral("1–3600 秒"), duration, true));
     durationLayout->addStretch();
-    cache->addWidget(field(QStringLiteral("原始录音切片时长"), duration, shell));
+    cache->addWidget(inlineField(QStringLiteral("原始录音切片时长"), duration, shell));
     controls_.sliceSeconds->setAccessibleName(QStringLiteral("原始录音切片时长，秒"));
     auto *retention = label(QStringLiteral("缓存按会话分别保存，历史录音不会自动清理。"), shell, true);
-    retention->setFont(uiFont(14));
+    retention->setFont(uiFont(11));
     cache->addWidget(retention);
 
     auto *appearance = page(tabs_, QStringLiteral("外观"));
@@ -279,26 +275,28 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     }
     appearance->addLayout(choices);
     auto *immediate = label(QStringLiteral("主题立即生效；两套主题使用相同的布局和操作。"), shell, true);
-    immediate->setFont(uiFont(14));
+    immediate->setFont(uiFont(11));
     appearance->addWidget(immediate);
     appearance->addWidget(label(QStringLiteral("展开窗适合查看完整转写，紧凑窗便于与其他应用并行使用。"), shell, true));
 
-    layout->addSpacing(12);
+    appearance->addWidget(
+        label(QStringLiteral("版本信息 · aha-flow v%1").arg(QCoreApplication::applicationVersion()), shell, true));
     auto *footer = new QWidget(shell);
     footer->setObjectName("settingsFooter");
     auto *footerLayout = new QVBoxLayout(footer);
     footerLayout->setContentsMargins(0, 0, 0, 0);
-    footerLayout->setSpacing(8);
+    footerLayout->setSpacing(0);
     auto *divider = new QFrame(footer);
     divider->setProperty("role", "divider");
     divider->setFixedHeight(1);
     footerLayout->addWidget(divider);
     auto *actions = new QHBoxLayout;
     actions->setContentsMargins(0, 0, 0, 0);
-    actions->addWidget(label(QStringLiteral("自动保存"), footer, true), 1);
+    actions->addWidget(label(QStringLiteral("自动保存 · 识别配置下次开始时生效"), footer, true), 1);
     auto *done = new QPushButton(QStringLiteral("完成"), footer);
     done->setObjectName("settingsDone");
     done->setFixedSize(72, 32);
+    done->setFont(uiFont(13, true));
     done->setAccessibleName(QStringLiteral("完成设置"));
     actions->addWidget(done);
     footerLayout->addLayout(actions);
@@ -326,25 +324,10 @@ void SettingsWindow::scheduleFit()
 
 void SettingsWindow::fitToContents()
 {
-    ensurePolished();
-    layout()->activate();
-    auto *shell = findChild<QFrame *>("settingsShell");
-    shell->layout()->activate();
-    auto *scroll = static_cast<QScrollArea *>(tabs_->currentWidget());
-    auto *contentLayout = scroll->widget()->layout();
-    contentLayout->activate();
-    const auto contentHeight = [contentLayout](int width) {
-        return contentLayout->hasHeightForWidth() ? contentLayout->totalHeightForWidth(width)
-                                                  : contentLayout->totalSizeHint().height();
-    };
-    // Measure the fixed chrome from laid-out geometry, including tab and shell borders.
-    const int chrome = height() - scroll->height();
+    // Keep title, tabs and footer stable across tabs and validation messages.
+    // Only the active page scrolls; small screens constrain the outer height.
     const QRect available = screen()->availableGeometry();
-    const int limit = qFloor(available.height() * 0.85);
-    int content = contentHeight(scroll->contentsRect().width());
-    if (chrome + content > limit)
-        content = contentHeight(scroll->contentsRect().width() - scroll->verticalScrollBar()->sizeHint().width());
-    resize(width(), qMin(chrome + content, limit));
+    setFixedHeight(qMin(360, qFloor(available.height() * 0.85)));
     if (isVisible())
         move(qBound(available.left(), x(), qMax(available.left(), available.right() - width() + 1)),
              qBound(available.top(), y(), qMax(available.top(), available.bottom() - height() + 1)));
@@ -362,6 +345,7 @@ void SettingsWindow::watchScreen(QScreen *screen)
 void SettingsWindow::showEvent(QShowEvent *event)
 {
     QDialog::showEvent(event);
+    setFocus(Qt::OtherFocusReason);
     if (!screenConnected_) {
         connect(windowHandle(), &QWindow::screenChanged, this, &SettingsWindow::watchScreen);
         screenConnected_ = true;
