@@ -49,12 +49,14 @@ jobs:
               export AHA_TEST_AUDIO=1
               bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe
             ' 2>&1 | tee build/release/package-test.log
-      - name: Upload Linux diagnostics
-        if: failure()
+      - name: Upload Linux verification evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: aha-flow-linux-diagnostics
-          path: build/release/*.log
+          name: aha-flow-linux-verification
+          path: |
+            build/release/*.log
+            build/release/tests/aha_runtime_probe
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
