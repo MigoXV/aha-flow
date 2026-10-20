@@ -20,7 +20,7 @@ foreach(required platforms/libqxcb.so platforms/libqwayland-generic.so
 endforeach()
 
 # 本应用只需采集 PCM；携带音频相关 GStreamer 插件，不部署视频编解码插件集。
-foreach(plugin coreelements typefindfunctions audioconvert audioresample
+foreach(plugin coreelements typefindfunctions app audioconvert audioresample
         autodetect pulseaudio playback volume rawparse)
     set(path "@AHA_SYSTEM_LIBDIR@/gstreamer-1.0/libgst${plugin}.so")
     if(NOT EXISTS "${path}")
@@ -55,6 +55,8 @@ endforeach()
 list(APPEND license_inputs ${resolved} ${extra_libraries} ${modules} "${scanner}")
 set(packages)
 foreach(input IN LISTS license_inputs)
+    # ldconfig 可能返回 /lib 别名，而 Ubuntu 包清单使用 /usr/lib。
+    file(REAL_PATH "${input}" input)
     execute_process(COMMAND dpkg-query -S "${input}" OUTPUT_VARIABLE owner
         RESULT_VARIABLE owner_result OUTPUT_STRIP_TRAILING_WHITESPACE)
     if(NOT owner_result EQUAL 0)

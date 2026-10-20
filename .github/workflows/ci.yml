@@ -27,12 +27,13 @@ jobs:
       - name: Configure
         run: cmake --preset release -DAHA_PORTABLE_LINUX=ON
       - name: Build
-        run: cmake --build --preset release --parallel 2
+        run: |
+          cmake --build --preset release --parallel 2 2>&1 | tee build/release/build.log
       - name: Test without the LAN engine
         run: ctest --preset release
       - name: Package
         working-directory: build/release
-        run: cpack -G TGZ
+        run: cpack -G TGZ 2>&1 | tee package.log
       - name: Verify portable package on Ubuntu 24.04 without Qt
         run: |
           docker run --rm \
@@ -42,7 +43,14 @@ jobs:
               apt-get update
               DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth
               bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe
-            '
+            ' 2>&1 | tee build/release/package-test.log
+      - name: Upload Linux diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aha-flow-linux-diagnostics
+          path: build/release/*.log
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: aha-flow-linux-x64

@@ -1,3 +1,4 @@
+#include <QAudioDevice>
 #include <QCoreApplication>
 #include <QMediaDevices>
 #include <QMediaPlayer>
