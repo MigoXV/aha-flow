@@ -35,6 +35,9 @@ if(WIN32)
 endif()
 
 if(UNIX AND NOT APPLE)
+    if(AHA_PORTABLE_LINUX)
+        include(${PROJECT_SOURCE_DIR}/cmake/PortableLinux.cmake)
+    endif()
     configure_file(${PROJECT_SOURCE_DIR}/packaging/aha-flow.desktop.in aha-flow.desktop @ONLY)
     install(FILES ${CMAKE_CURRENT_BINARY_DIR}/aha-flow.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications COMPONENT Runtime)

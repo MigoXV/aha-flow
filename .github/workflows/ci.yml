@@ -23,9 +23,9 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build qt6-base-dev qt6-multimedia-dev qt6-websockets-dev qt6-svg-dev
+          sudo apt-get install -y --no-install-recommends ninja-build qt6-base-dev qt6-multimedia-dev qt6-websockets-dev qt6-svg-dev qt6-wayland libssl-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good
       - name: Configure
-        run: cmake --preset release
+        run: cmake --preset release -DAHA_PORTABLE_LINUX=ON
       - name: Build
         run: cmake --build --preset release --parallel 2
       - name: Test without the LAN engine
@@ -33,6 +33,16 @@ jobs:
       - name: Package
         working-directory: build/release
         run: cpack -G TGZ
+      - name: Verify portable package on Ubuntu 24.04 without Qt
+        run: |
+          docker run --rm \
+            -v "$PWD:/source:ro" ubuntu:24.04 bash -ec '
+              test -z "$(dpkg-query -W "libqt6*" 2>/dev/null)"
+              bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth
+              bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe
+            '
       - uses: actions/upload-artifact@v4
         with:
           name: aha-flow-linux-x64

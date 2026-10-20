@@ -1,0 +1,77 @@
+set(root "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}")
+set(modules)
+set(license_inputs)
+
+# Qt 的插件通过 dlopen 加载，不能仅扫描主程序的链接依赖。
+foreach(category platforms imageformats iconengines platforminputcontexts
+        xcbglintegrations wayland-decoration-client wayland-graphics-integration-client
+        wayland-shell-integration multimedia tls networkinformation)
+    file(GLOB plugins "@AHA_QT_PLUGINS@/${category}/*.so")
+    if(plugins)
+        file(INSTALL ${plugins} DESTINATION "${root}/plugins/${category}")
+        list(APPEND modules ${plugins})
+    endif()
+endforeach()
+foreach(required platforms/libqxcb.so platforms/libqwayland-generic.so
+        multimedia/libgstreamermediaplugin.so tls/libqopensslbackend.so)
+    if(NOT EXISTS "${root}/plugins/${required}")
+        message(FATAL_ERROR "Missing required Qt plugin: ${required}")
+    endif()
+endforeach()
+
+# 本应用只需采集 PCM；携带音频相关 GStreamer 插件，不部署视频编解码插件集。
+foreach(plugin coreelements typefindfunctions audioconvert audioresample
+        autodetect pulseaudio playback volume rawparse)
+    set(path "@AHA_SYSTEM_LIBDIR@/gstreamer-1.0/libgst${plugin}.so")
+    if(NOT EXISTS "${path}")
+        message(FATAL_ERROR "Missing GStreamer plugin: ${path}")
+    endif()
+    file(INSTALL "${path}" DESTINATION "${root}/lib/gstreamer-1.0")
+    list(APPEND modules "${path}")
+endforeach()
+set(scanner "@AHA_SYSTEM_LIBDIR@/gstreamer1.0/gstreamer-1.0/gst-plugin-scanner")
+file(INSTALL "${scanner}" DESTINATION "${root}/libexec" TYPE PROGRAM)
+
+# OpenSSL/ALSA 可能由插件动态加载，显式作为依赖扫描入口。
+set(extra_libraries "@AHA_SYSTEM_LIBDIR@/libssl.so.3"
+    "@AHA_SYSTEM_LIBDIR@/libcrypto.so.3" "@AHA_SYSTEM_LIBDIR@/libasound.so.2")
+file(GET_RUNTIME_DEPENDENCIES
+    EXECUTABLES "${root}/@CMAKE_INSTALL_BINDIR@/aha-flow" "${scanner}"
+    LIBRARIES ${extra_libraries}
+    MODULES ${modules}
+    RESOLVED_DEPENDENCIES_VAR resolved
+    UNRESOLVED_DEPENDENCIES_VAR unresolved
+    # glibc 与加载器使用 Ubuntu 24.04 系统版本。
+    PRE_EXCLUDE_REGEXES "^ld-linux.*" "^lib(c|m|pthread|dl|rt|resolv|util|anl)\\.so\\."
+)
+if(unresolved)
+    message(FATAL_ERROR "Unresolved portable runtime dependencies: ${unresolved}")
+endif()
+foreach(library IN LISTS resolved extra_libraries)
+    file(INSTALL "${library}" DESTINATION "${root}/lib" FOLLOW_SYMLINK_CHAIN)
+endforeach()
+
+# 保存所分发 Ubuntu 软件包的版本、版权声明和许可证。
+list(APPEND license_inputs ${resolved} ${extra_libraries} ${modules} "${scanner}")
+set(packages)
+foreach(input IN LISTS license_inputs)
+    execute_process(COMMAND dpkg-query -S "${input}" OUTPUT_VARIABLE owner
+        RESULT_VARIABLE owner_result OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT owner_result EQUAL 0)
+        message(FATAL_ERROR "Cannot identify license owner: ${input}")
+    endif()
+    string(REGEX REPLACE ": /.*" "" owner "${owner}")
+    list(APPEND packages "${owner}")
+endforeach()
+list(REMOVE_DUPLICATES packages)
+file(MAKE_DIRECTORY "${root}/share/aha-flow/licenses/ubuntu")
+file(WRITE "${root}/share/aha-flow/licenses/ubuntu/packages.txt" "")
+foreach(package IN LISTS packages)
+    string(REGEX REPLACE ":.*" "" package_name "${package}")
+    file(INSTALL "/usr/share/doc/${package_name}/copyright"
+        DESTINATION "${root}/share/aha-flow/licenses/ubuntu/${package_name}")
+    execute_process(COMMAND dpkg-query -W "-f=\${binary:Package} \${Version}\n" "${package}"
+        OUTPUT_VARIABLE version COMMAND_ERROR_IS_FATAL ANY)
+    file(APPEND "${root}/share/aha-flow/licenses/ubuntu/packages.txt" "${version}")
+endforeach()
+file(INSTALL /usr/share/common-licenses DESTINATION "${root}/share/aha-flow/licenses")

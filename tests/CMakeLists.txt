@@ -33,3 +33,8 @@ qt_add_executable(aha_correction_tests correction_test.cpp)
 target_link_libraries(aha_correction_tests PRIVATE aha_network Qt6::Test aha_options)
 add_test(NAME text_correction COMMAND aha_correction_tests)
 set_tests_properties(text_correction PROPERTIES TIMEOUT 30)
+
+if(AHA_PORTABLE_LINUX)
+    qt_add_executable(aha_runtime_probe runtime_probe.cpp)
+    target_link_libraries(aha_runtime_probe PRIVATE Qt6::Network Qt6::Multimedia aha_options)
+endif()

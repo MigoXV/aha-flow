@@ -4,7 +4,22 @@
 
 已实现置顶无边框窗口、展开/紧凑模式、拖动和缩放、自动开始识别、麦克风按钮、计时、音量条、分轮转写与设置面板。支持 AHA 中间预览、物理停顿与语义轮次状态、流式文本纠错，以及可配置的原始录音/VAD FLAC 缓存。应用不包含 WebEngine、Electron 或 Python 运行时。
 
-## 安装环境
+## Ubuntu 24.04 直接使用
+
+Linux 发布产物为 `aha-flow-版本-ubuntu24.04-x86_64.tar.gz`，面向 **Ubuntu 24.04 x86_64 桌面环境**。包内携带 Qt、图形平台插件、音频插件和相关运行库；无需安装 Qt、开发工具、FUSE，也无需 `sudo`。
+
+解压后运行包根目录的 `aha-flow`：
+
+```bash
+tar -xzf aha-flow-0.2.0-ubuntu24.04-x86_64.tar.gz
+./aha-flow-0.2.0-ubuntu24.04-x86_64/aha-flow
+```
+
+请保留完整目录，通过根目录启动器运行；不要单独复制 `bin/aha-flow`。启动器只为当前进程配置随包库，不修改系统目录或 shell 配置。支持 X11 和 Wayland 插件，使用桌面已有的显示、声音服务及系统驱动。删除解压目录即可移除应用和随包库；本机设置、录音缓存另行管理。不承诺其他发行版或 CPU 架构。
+
+以下安装步骤仅用于**从源码开发和构建**，普通使用者不需要执行。
+
+## 开发环境
 
 要求 CMake 3.21+、Qt 6.4+、支持 C++17 的编译器；Windows 使用 Qt 6.8.3 / MSVC 2022。
 
@@ -183,18 +198,25 @@ aha-flow/
 
 ## GitHub Actions 与打包
 
-推送、PR 和手动触发执行离线构建/测试并上传产物：Ubuntu 24.04 的 `.tar.gz`，Windows 2022 / Qt 6.8.3 / MSVC 2022 的 `.zip`。Windows 部署步骤收集 Qt DLL、平台和多媒体插件及编译器运行库。工作流不访问局域网引擎，无需引擎密钥；未自动发布 GitHub Release。
+推送、PR 和手动触发执行离线构建/测试并上传产物：Ubuntu 24.04 x86_64 自带运行库的 `.tar.gz`，Windows 2022 / Qt 6.8.3 / MSVC 2022 的 `.zip`。Windows 部署步骤收集 Qt DLL、平台和多媒体插件及编译器运行库。工作流不访问局域网引擎，无需引擎密钥；未自动发布 GitHub Release。
 
 Windows 还通过原生 `windows` 平台验证 100%、125%、200% 缩放，上传 `aha-flow-windows-ui-checks`：包含浅色/深色窗口截图、`fonts.json` 中各控件的请求字体与中文实际字形字体、字体引擎日志及测试结果。常规离线测试继续使用 `offscreen`；原生截图用于核查 Windows 字体路径，不替代实际显示器上的视觉确认。
 
-Linux 包需要目标机器安装兼容版本的 Qt 运行库，当前不是 AppImage。Windows 解压后运行 `bin/aha-flow.exe`。音频依赖的许可证随包附在 `share/aha-flow/licenses`。
+Linux 便携包通过 CMake 递归收集动态库，并显式部署 Qt、GStreamer 和 TLS 动态加载依赖；不捆绑 glibc 和系统动态加载器。CI 在没有 Qt 的全新 Ubuntu 24.04 容器中检查所有随包 ELF 文件的依赖、包含空格和中文的解压路径、无显示启动，再安装 Xvfb 检查 xcb 窗口启动。验证不访问引擎、不打开真实麦克风。Windows 解压后运行 `bin/aha-flow.exe`。依赖的许可证和 Ubuntu 软件包版本清单随包附在 `share/aha-flow/licenses`。
 
 应用图标沿用「苍渊·白垣」配色，将字母 a、语音波形与流动尾笔结合；矢量源文件位于 `src/app/assets/aha-flow.svg`。窗口图标内置 16–512px PNG，Windows EXE 内嵌多尺寸 ICO。Linux 包携带桌面入口及 hicolor 图标；如需安装到用户应用菜单，先以 `cmake --preset release -DCMAKE_INSTALL_PREFIX="$HOME/.local"` 配置，再构建并执行 `cmake --install build/release --component Runtime`。仅解压并直接运行时，窗口仍使用内置图标。
 
-本机打包：
+普通源码构建仍可使用系统 Qt。本机生成 Linux 便携包必须在 Ubuntu 24.04 x86_64 中执行，额外构建依赖如下（只安装在构建机）：
 
 ```bash
-cmake --preset release
+sudo apt install -y qt6-wayland libssl-dev \
+  gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+```
+
+便携包构建：
+
+```bash
+cmake --preset release -DAHA_PORTABLE_LINUX=ON
 cmake --build --preset release --parallel 2
 ctest --preset release
 cd build/release
