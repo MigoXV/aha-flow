@@ -41,7 +41,12 @@ jobs:
               test -z "$(dpkg-query -W "libqt6*" 2>/dev/null)"
               bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe
               apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth pulseaudio pulseaudio-utils
+              pulseaudio --start --exit-idle-time=-1 --load="module-native-protocol-unix socket=/tmp/aha-flow-pulse.sock auth-anonymous=1"
+              export PULSE_SERVER=unix:/tmp/aha-flow-pulse.sock
+              pactl load-module module-null-sink sink_name=aha_test
+              pactl set-default-source aha_test.monitor
+              export AHA_TEST_AUDIO=1
               bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe
             ' 2>&1 | tee build/release/package-test.log
       - name: Upload Linux diagnostics

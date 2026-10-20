@@ -7,6 +7,10 @@ foreach(category platforms imageformats iconengines platforminputcontexts
         xcbglintegrations wayland-decoration-client wayland-graphics-integration-client
         wayland-shell-integration multimedia tls networkinformation)
     file(GLOB plugins "@AHA_QT_PLUGINS@/${category}/*.so")
+    if(category STREQUAL "multimedia")
+        # Ubuntu 24.04 的 GStreamer 后端足够支持本应用，避免携带 FFmpeg 视频依赖。
+        set(plugins "@AHA_QT_PLUGINS@/multimedia/libgstreamermediaplugin.so")
+    endif()
     if(plugins)
         file(INSTALL ${plugins} DESTINATION "${root}/plugins/${category}")
         list(APPEND modules ${plugins})

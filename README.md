@@ -202,7 +202,7 @@ aha-flow/
 
 Windows 还通过原生 `windows` 平台验证 100%、125%、200% 缩放，上传 `aha-flow-windows-ui-checks`：包含浅色/深色窗口截图、`fonts.json` 中各控件的请求字体与中文实际字形字体、字体引擎日志及测试结果。常规离线测试继续使用 `offscreen`；原生截图用于核查 Windows 字体路径，不替代实际显示器上的视觉确认。
 
-Linux 便携包通过 CMake 递归收集动态库，并显式部署 Qt、GStreamer 和 TLS 动态加载依赖；不捆绑 glibc 和系统动态加载器。CI 在没有 Qt 的全新 Ubuntu 24.04 容器中检查所有随包 ELF 文件的依赖、包含空格和中文的解压路径、无显示启动，再安装 Xvfb 检查 xcb 窗口启动。验证不访问引擎、不打开真实麦克风。Windows 解压后运行 `bin/aha-flow.exe`。依赖的许可证和 Ubuntu 软件包版本清单随包附在 `share/aha-flow/licenses`。
+Linux 便携包通过 CMake 递归收集动态库，并显式部署 Qt、GStreamer 和 TLS 动态加载依赖；不捆绑 glibc 和系统动态加载器。CI 在没有 Qt 的全新 Ubuntu 24.04 容器中检查所有随包 ELF 文件的依赖、包含空格和中文的解压路径、TLS/多媒体后端及无显示启动，再安装 Xvfb 和 PulseAudio 检查 xcb 窗口启动与虚拟音源采集。验证不访问引擎、不打开真实麦克风；这些测试工具只安装在验证容器中。Windows 解压后运行 `bin/aha-flow.exe`。依赖的许可证和 Ubuntu 软件包版本清单随包附在 `share/aha-flow/licenses`。
 
 应用图标沿用「苍渊·白垣」配色，将字母 a、语音波形与流动尾笔结合；矢量源文件位于 `src/app/assets/aha-flow.svg`。窗口图标内置 16–512px PNG，Windows EXE 内嵌多尺寸 ICO。Linux 包携带桌面入口及 hicolor 图标；如需安装到用户应用菜单，先以 `cmake --preset release -DCMAKE_INSTALL_PREFIX="$HOME/.local"` 配置，再构建并执行 `cmake --install build/release --component Runtime`。仅解压并直接运行时，窗口仍使用内置图标。
 
