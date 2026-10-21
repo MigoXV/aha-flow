@@ -1,3 +1,7 @@
+tmp-workspace/
+data-bin/
+model-bin/
+
 /build/
 /dist/
 /.cache/
