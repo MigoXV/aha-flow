@@ -6,6 +6,8 @@
 #include <QPushButton>
 #include <QProgressBar>
 #include <QTextEdit>
+#include <QElapsedTimer>
+#include <QTimer>
 
 namespace aha
 {
@@ -37,15 +39,26 @@ class SessionTimeLabel final : public QLabel
     void paintEvent(QPaintEvent *event) override;
 };
 
-// Paint every measured change without native progress-bar chunk/repaint thresholds.
+// Audio-driven target with fast attack and smooth release, rendered independently of input callbacks.
 class InputLevelMeter final : public QProgressBar
 {
   public:
     explicit InputLevelMeter(QWidget *parent);
     void setLevel(float level);
+    void clearLevel();
 
   protected:
     void paintEvent(QPaintEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+
+  private:
+    void advanceFrame();
+    void startFrames();
+    QTimer frameTimer_;
+    QElapsedTimer clock_;
+    qint64 lastFrameNs_ = 0, lastSampleNs_ = 0;
+    qreal displayedLevel_ = 0;
 };
 
 // Draw the live-result label outside selectable text, keeping finalized text plain.

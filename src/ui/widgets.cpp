@@ -49,12 +49,67 @@ InputLevelMeter::InputLevelMeter(QWidget *parent) : QProgressBar(parent)
     setFixedHeight(4);
     setMinimumWidth(64);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    connect(this, &QProgressBar::valueChanged, this, [this] { update(); });
+    clock_.start();
+    frameTimer_.setTimerType(Qt::PreciseTimer);
+    frameTimer_.setInterval(16);
+    connect(&frameTimer_, &QTimer::timeout, this, &InputLevelMeter::advanceFrame);
 }
 
 void InputLevelMeter::setLevel(float level)
 {
     setValue(std::isfinite(level) ? qRound(qBound(0.0f, level, 1.0f) * maximum()) : 0);
+    lastSampleNs_ = clock_.nsecsElapsed();
+    startFrames();
+}
+
+void InputLevelMeter::clearLevel()
+{
+    frameTimer_.stop();
+    setValue(0);
+    displayedLevel_ = 0;
+    update();
+}
+
+void InputLevelMeter::startFrames()
+{
+    if (isVisible() && !frameTimer_.isActive() && (value() > 0 || displayedLevel_ > 0)) {
+        lastFrameNs_ = clock_.nsecsElapsed();
+        frameTimer_.start();
+    }
+}
+
+void InputLevelMeter::advanceFrame()
+{
+    const qint64 now = clock_.nsecsElapsed();
+    const qreal elapsedMs = (now - lastFrameNs_) / 1e6;
+    lastFrameNs_ = now;
+    // Missing input must decay instead of holding a stale microphone level indefinitely.
+    if (now - lastSampleNs_ > 150000000)
+        setValue(0);
+    const qreal target = qreal(value()) / maximum();
+    const qreal timeConstantMs = target > displayedLevel_ ? 12 : 80;
+    displayedLevel_ += (target - displayedLevel_) * -std::expm1(-elapsedMs / timeConstantMs);
+    if (qAbs(displayedLevel_ - target) * width() < 0.1) {
+        displayedLevel_ = target;
+        if (target == 0)
+            frameTimer_.stop();
+    }
+    update();
+}
+
+void InputLevelMeter::showEvent(QShowEvent *event)
+{
+    QProgressBar::showEvent(event);
+    if (clock_.nsecsElapsed() - lastSampleNs_ > 150000000)
+        clearLevel();
+    else
+        startFrames();
+}
+
+void InputLevelMeter::hideEvent(QHideEvent *event)
+{
+    frameTimer_.stop();
+    QProgressBar::hideEvent(event);
 }
 
 void InputLevelMeter::paintEvent(QPaintEvent *)
@@ -62,8 +117,10 @@ void InputLevelMeter::paintEvent(QPaintEvent *)
     const auto &t = theme(property("dark").toBool());
     QPainter p(this);
     p.fillRect(rect(), t.border);
-    const int filled = qRound(width() * qreal(value()) / maximum());
-    p.fillRect(QRect(0, 0, filled, height()), t.strongAccent);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(Qt::NoPen);
+    p.setBrush(t.strongAccent);
+    p.drawRect(QRectF(0, 0, width() * displayedLevel_, height()));
 }
 
 void TranscriptView::paintEvent(QPaintEvent *event)

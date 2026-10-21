@@ -97,8 +97,6 @@ class SessionWorker final : public QObject
         stopping_ = false;
         if (replayTimer_)
             replayTimer_->stop();
-        if (levelTimer_)
-            levelTimer_->stop();
         if (realtime_)
             realtime_->stop();
         converter_.reset();
@@ -142,8 +140,15 @@ class SessionWorker final : public QObject
             fail(QStringLiteral("麦克风音频积压超过 5 秒"));
             return;
         }
-        for (const QByteArray &pcm : converter_->feed(input_->readAll()))
+        const QByteArray input = input_->readAll();
+        if (input.isEmpty())
+            return;
+        for (const QByteArray &pcm : converter_->feed(input))
             push(pcm);
+        // Publish fresh measurements on capture, independently of 100ms network packets.
+        // Repeating an old value on a polling timer would prevent stale-input decay in the UI.
+        if (!stopped_ && !failing_)
+            emit level(id_, converter_->level());
     }
     void capture()
     {
@@ -176,7 +181,7 @@ class SessionWorker final : public QObject
                 format = device.preferredFormat();
             converter_ = std::make_unique<PcmConverter>(format);
             audio_ = new QAudioSource(device, format, this);
-            audio_->setBufferSize(static_cast<qsizetype>(format.bytesForDuration(200000)));
+            audio_->setBufferSize(static_cast<qsizetype>(format.bytesForDuration(40000)));
             connect(audio_, &QAudioSource::stateChanged, this, [this](QAudio::State state) {
                 if (!stopped_ && state == QAudio::StoppedState && audio_->error() != QAudio::NoError)
                     fail(QStringLiteral("麦克风采集失败（%1）").arg(static_cast<int>(audio_->error())));
@@ -191,12 +196,6 @@ class SessionWorker final : public QObject
                     fail(QString::fromUtf8(error.what()));
                 }
             });
-            levelTimer_ = new QTimer(this);
-            connect(levelTimer_, &QTimer::timeout, this, [this] {
-                if (converter_)
-                    emit level(id_, converter_->level());
-            });
-            levelTimer_->start(50);
         }
         emit recording(id_);
         capturingStarted_ = true;
@@ -211,7 +210,7 @@ class SessionWorker final : public QObject
     TextCorrection *correction_ = nullptr;
     QAudioSource *audio_ = nullptr;
     QIODevice *input_ = nullptr;
-    QTimer *replayTimer_ = nullptr, *levelTimer_ = nullptr;
+    QTimer *replayTimer_ = nullptr;
     std::unique_ptr<PcmConverter> converter_;
     std::unique_ptr<QFile> replayFile_;
     TranscriptionState state_;

@@ -512,7 +512,7 @@ void MainWindow::setStatus(const QString &label, const QString &detail)
     const bool error = label == QStringLiteral("错误"), idle = label == QStringLiteral("待机");
     const bool busy = label == QStringLiteral("连接中") || label == QStringLiteral("停止中");
     if (busy || idle || error)
-        meter_->setValue(0);
+        meter_->clearLevel();
     emptyTitle_->setText(label == QStringLiteral("连接中") ? QStringLiteral("正在连接识别引擎")
                          : error                           ? QStringLiteral("无法连接识别引擎")
                          : idle                            ? QStringLiteral("识别已停止")

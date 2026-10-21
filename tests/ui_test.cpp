@@ -34,6 +34,9 @@
 #include <QTextLayout>
 #include <QComboBox>
 #include <QTextEdit>
+#include <QTimer>
+#include <QSet>
+#include <QEventLoop>
 
 class UiTest final : public QObject
 {
@@ -464,16 +467,29 @@ class UiTest final : public QObject
             for (auto *label : window.findChildren<QLabel *>())
                 QVERIFY(label->text() != QStringLiteral("uxspeech-flow"));
             int previousFilled = -1;
+            float currentLevel = 0;
+            QTimer input;
+            input.setInterval(25);
+            connect(&input, &QTimer::timeout, &window, [&] { window.session()->levelChanged(currentLevel); });
+            input.start();
             for (const float level : {0.0f, 0.006f, 0.14f, 0.63f, 0.0f}) {
+                currentLevel = level;
                 window.session()->levelChanged(level);
-                QTest::qWait(5);
-                const QImage pixels = meter->grab().toImage();
                 const QColor fill = aha::theme(dark).strongAccent;
-                int filled = 0;
-                for (int x = 0; x < pixels.width(); ++x)
-                    filled += pixels.pixelColor(x, pixels.height() / 2) == fill;
+                const auto countFilled = [&] {
+                    const QImage pixels = meter->grab().toImage();
+                    int count = 0;
+                    for (int x = 0; x < pixels.width(); ++x)
+                        count += pixels.pixelColor(x, pixels.height() / 2) == fill;
+                    return count;
+                };
                 const int expected = qRound(meter->width() * meter->value() / qreal(meter->maximum()));
-                QVERIFY(qAbs(filled - qRound(expected * pixels.devicePixelRatio())) <= 1);
+                QTRY_VERIFY_WITH_TIMEOUT(
+                    expected == 0
+                        ? countFilled() == 0
+                        : countFilled() > 0 && qAbs(countFilled() - qRound(expected * meter->devicePixelRatioF())) <= 1,
+                    1500);
+                const int filled = countFilled();
                 QVERIFY(filled != previousFilled);
                 previousFilled = filled;
                 const QString captures = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
@@ -483,9 +499,85 @@ class UiTest final : public QObject
                         QStringLiteral("meter-%1-%2.png").arg(dark ? "dark" : "light").arg(meter->value())));
                 }
             }
+            input.stop();
             window.session()->levelChanged(0.8f);
             window.session()->statusChanged(QStringLiteral("错误"), QStringLiteral("服务不可达"));
             QCOMPARE(meter->value(), 0);
+        }
+    }
+    void inputLevelMotionIsContinuous()
+    {
+        for (const bool dark : {false, true}) {
+            aha::AppSettings settings;
+            settings.theme = dark ? "abyssus" : "vallum";
+            aha::MainWindow window(settings, false);
+            window.show();
+            window.session()->started();
+            auto *meter = window.findChild<QProgressBar *>("inputLevel");
+            QTest::qWait(20);
+            QSet<int> lengths;
+            const auto filledPixels = [&] {
+                const QImage pixels = meter->grab().toImage();
+                int count = 0;
+                for (int x = 0; x < pixels.width(); ++x)
+                    count += pixels.pixelColor(x, pixels.height() / 2) == aha::theme(dark).strongAccent;
+                return count;
+            };
+            // Sparse, abrupt audio samples must produce intermediate rendered frames.
+            bool high = true;
+            QTimer samples;
+            samples.setInterval(120);
+            connect(&samples, &QTimer::timeout, &window, [&] {
+                high = !high;
+                window.session()->levelChanged(high ? 0.85f : 0.05f);
+            });
+            window.session()->levelChanged(0.85f);
+            samples.start();
+            QElapsedTimer elapsed;
+            elapsed.start();
+            int frames = 0;
+            bool overshot = false;
+            QJsonArray positions;
+            QTimer capture;
+            capture.setTimerType(Qt::PreciseTimer);
+            capture.setInterval(16);
+            connect(&capture, &QTimer::timeout, &window, [&] {
+                const int filled = filledPixels();
+                lengths.insert(filled);
+                overshot |= filled > qCeil(meter->width() * 0.85 * meter->devicePixelRatioF());
+                positions.append(
+                    QJsonObject{{"ms", elapsed.elapsed()}, {"pixels", filled}, {"target", meter->value()}});
+                const QString captures = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+                if (!captures.isEmpty() && qEnvironmentVariableIsSet("AHA_FLOW_MOTION_CAPTURE")) {
+                    const QString path = QDir(captures).filePath(dark ? "motion-dark" : "motion-light");
+                    QDir().mkpath(path);
+                    window.grab().save(
+                        QDir(path).filePath(QStringLiteral("%1.png").arg(frames, 3, 10, QLatin1Char('0'))), "PNG", 100);
+                }
+                ++frames;
+            });
+            capture.start();
+            QEventLoop loop;
+            QTimer::singleShot(1000, &loop, &QEventLoop::quit);
+            loop.exec();
+            capture.stop();
+            samples.stop();
+            QVERIFY(!overshot);
+            QVERIFY2(lengths.size() >= 12, "The meter must render intermediate positions between input samples.");
+            qInfo("Meter motion: %d frames, %lld distinct positions", frames, qlonglong(lengths.size()));
+            const QString captures = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+            if (!captures.isEmpty()) {
+                QFile evidence(QDir(captures).filePath(dark ? "motion-dark.json" : "motion-light.json"));
+                QVERIFY(evidence.open(QIODevice::WriteOnly));
+                evidence.write(QJsonDocument(positions).toJson());
+            }
+            QTest::qWait(800);
+            QCOMPARE(filledPixels(), 0); // Lost audio callbacks must not leave a frozen bar.
+            window.session()->levelChanged(0.8f);
+            QTest::qWait(40);
+            QVERIFY(filledPixels() > 0);
+            window.session()->statusChanged(QStringLiteral("待机"), {});
+            QCOMPARE(filledPixels(), 0); // Stopping clears immediately instead of animating a fake signal.
         }
     }
     void finalizedTextHasNoStageLabelSpace()
