@@ -14,7 +14,6 @@ set(AHA_SYSTEM_LIBDIR "/usr/lib/${CMAKE_LIBRARY_ARCHITECTURE}")
 configure_file(${PROJECT_SOURCE_DIR}/packaging/deploy-linux.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/deploy-linux.cmake @ONLY)
 install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/deploy-linux.cmake COMPONENT Runtime)
-install(PROGRAMS ${PROJECT_SOURCE_DIR}/packaging/aha-flow.sh
-    DESTINATION . RENAME aha-flow COMPONENT Runtime)
+install(TARGETS aha-flow-launcher RUNTIME DESTINATION . COMPONENT Runtime)
 install(FILES ${PROJECT_SOURCE_DIR}/packaging/qt.conf
     DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT Runtime)

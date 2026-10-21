@@ -35,6 +35,14 @@ if(WIN32)
 endif()
 
 if(UNIX AND NOT APPLE)
+    add_executable(aha-flow-launcher linux_launcher.c)
+    target_link_libraries(aha-flow-launcher PRIVATE aha_options)
+    set_target_properties(aha-flow-launcher PROPERTIES
+        AUTOMOC OFF
+        AUTOUIC OFF
+        OUTPUT_NAME aha-flow
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/launcher"
+    )
     if(AHA_PORTABLE_LINUX)
         include(${PROJECT_SOURCE_DIR}/cmake/PortableLinux.cmake)
     endif()

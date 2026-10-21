@@ -9,7 +9,9 @@ mkdir -p "$work/包含 空格" "$work/home"
 tar -xzf "$archive" -C "$work/包含 空格"
 app=$(find "$work/包含 空格" -mindepth 1 -maxdepth 1 -type d)
 test -x "$app/aha-flow"
-export HOME="$work/home"
+export XDG_CONFIG_HOME="$work/home/config"
+export XDG_DATA_HOME="$work/home/data"
+export XDG_CACHE_HOME="$work/home/cache"
 export XDG_RUNTIME_DIR="$work/runtime"
 mkdir -m 700 "$XDG_RUNTIME_DIR"
 export LD_LIBRARY_PATH="$app/lib"
@@ -23,7 +25,7 @@ while IFS= read -r -d '' binary; do
         printf '%s\n%s\n' "$binary" "$dependencies"
         exit 1
     fi
-done < <(find "$app/lib" "$app/plugins" "$app/libexec" "$app/bin" -type f \
+done < <(find "$app" -type f \
     \( -name '*.so*' -o -name aha-flow -o -name gst-plugin-scanner \) -print0)
 unset LD_LIBRARY_PATH
 cd /
@@ -32,7 +34,7 @@ LD_LIBRARY_PATH="$app/lib" QT_PLUGIN_PATH="$app/plugins" QT_MEDIA_BACKEND=gstrea
     G_DEBUG=fatal-criticals \
     GST_PLUGIN_SYSTEM_PATH_1_0="$app/lib/gstreamer-1.0" \
     GST_PLUGIN_SCANNER_1_0="$app/libexec/gst-plugin-scanner" \
-    timeout 20 "$probe"
+    timeout 20 "$probe" "$app/aha-flow"
 QT_QPA_PLATFORM=offscreen timeout 20 "$app/aha-flow" --smoke-test
 # 第二阶段安装 Xvfb 后验证真实 xcb 平台路径，不依赖局域网或麦克风。
 if command -v xvfb-run >/dev/null; then

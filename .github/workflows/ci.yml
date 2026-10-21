@@ -90,6 +90,22 @@ jobs:
         run: cmake --build build/windows --config Release --parallel 2
       - name: Test without the LAN engine
         run: ctest --test-dir build/windows -C Release --output-on-failure
+      - name: Verify Windows GUI entry point
+        shell: pwsh
+        run: |
+          $executable = (Resolve-Path ./build/windows/bin/Release/aha-flow.exe).Path
+          $bytes = [System.IO.File]::ReadAllBytes($executable)
+          $header = [System.BitConverter]::ToInt32($bytes, 0x3c)
+          $subsystem = [System.BitConverter]::ToUInt16($bytes, $header + 24 + 68)
+          if ($subsystem -ne 2) { throw "Expected Windows GUI subsystem, got $subsystem" }
+          Write-Output 'Windows GUI subsystem verified (no automatic console allocation).'
+          $process = Start-Process -FilePath $executable -ArgumentList '--smoke-test' -PassThru
+          if (-not $process.WaitForExit(10000)) {
+            Stop-Process -Id $process.Id -Force
+            throw 'GUI entry-point smoke test timed out'
+          }
+          $process.WaitForExit()
+          if ($process.ExitCode -ne 0) { throw "GUI entry-point exit code: $($process.ExitCode)" }
       - name: Check native Windows fonts and DPI
         if: always() && steps.windows-build.outcome == 'success'
         shell: pwsh

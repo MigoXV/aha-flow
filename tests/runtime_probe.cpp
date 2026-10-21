@@ -8,11 +8,26 @@
 #include <QSslSocket>
 #include <QTextStream>
 #include <QTimer>
+#include <QFile>
+#include <QFileInfo>
+#include <QMimeDatabase>
 
 // 在无系统 Qt 的容器中验证 dlopen 后端；不连接引擎或打开麦克风。
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    if (argc > 1) {
+        const QString launcher = QString::fromLocal8Bit(argv[1]);
+        QFile file(launcher);
+        const auto mime = QMimeDatabase().mimeTypeForFile(launcher);
+        if (!file.open(QIODevice::ReadOnly) || file.read(4) != QByteArray::fromHex("7f454c46") ||
+            !QFileInfo(launcher).isExecutable() ||
+            !(mime.inherits("application/x-executable") || mime.name() == "application/x-pie-executable")) {
+            QTextStream(stderr) << "Portable launcher is not a native executable\n";
+            return 5;
+        }
+        QTextStream(stdout) << "Launcher: ELF, executable, MIME " << mime.name() << '\n';
+    }
     if (!QSslSocket::supportsSsl()) {
         QTextStream(stderr) << "TLS backend unavailable\n";
         return 1;
@@ -23,8 +38,7 @@ int main(int argc, char **argv)
         return 1;
     }
     QTextStream(stdout) << "TLS: " << QSslSocket::sslLibraryVersionString()
-                        << "; multimedia available; audio inputs: "
-                        << QMediaDevices::audioInputs().size() << '\n';
+                        << "; multimedia available; audio inputs: " << QMediaDevices::audioInputs().size() << '\n';
     if (qEnvironmentVariableIsSet("AHA_TEST_AUDIO")) {
         const QAudioDevice device = QMediaDevices::defaultAudioInput();
         if (device.isNull())
