@@ -14,7 +14,6 @@
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QPainter>
-#include <QProgressBar>
 #include <QScreen>
 #include <QScrollBar>
 #include <QSignalBlocker>
@@ -183,7 +182,7 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     transcript_->document()->setDefaultFont(uiFont());
     transcript_->document()->setDocumentMargin(0);
     auto rootFormat = transcript_->document()->rootFrame()->frameFormat();
-    rootFormat.setTopMargin(18);
+    rootFormat.setTopMargin(0);
     transcript_->document()->rootFrame()->setFrameFormat(rootFormat);
     transcript_->setReadOnly(true);
     transcript_->setUndoRedoEnabled(false);
@@ -208,26 +207,17 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     actions->setSpacing(12);
     auto *meta = new QVBoxLayout;
     meta->setSpacing(0);
-    auto *engineRow = new QHBoxLayout;
-    engineRow->setSpacing(8);
-    meter_ = new QProgressBar(footer);
-    meter_->setRange(0, 100);
-    meter_->setValue(0);
-    meter_->setTextVisible(false);
-    meter_->setFixedSize(24, 3);
+    auto *levelRow = new QHBoxLayout;
+    levelRow->setContentsMargins(0, 7, 0, 7);
+    levelRow->setSpacing(8);
+    meter_ = new InputLevelMeter(footer);
+    meter_->setObjectName("inputLevel");
     meter_->setAccessibleName(QStringLiteral("语音电平"));
-    engineRow->addWidget(meter_);
-    modelHint_ = new ElidedLabel(footer);
-    modelHint_->setProperty("role", "caption");
-    modelHint_->setFont(uiFont(12, false, true));
-    modelHint_->setMinimumWidth(0);
-    modelHint_->setFixedHeight(18);
-    modelHint_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-    engineRow->addWidget(modelHint_, 1);
+    levelRow->addWidget(meter_, 1);
     cacheHint_ = caption({}, footer);
     cacheHint_->setFont(uiFont(11));
     cacheHint_->setMinimumHeight(16);
-    meta->addLayout(engineRow);
+    meta->addLayout(levelRow);
     meta->addWidget(cacheHint_);
     actions->addLayout(meta, 1);
     record_ = button("mic", QStringLiteral("开始识别"), footer);
@@ -362,8 +352,7 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     });
     connect(&session_, &SessionController::statusChanged, this, &MainWindow::setStatus);
     connect(&session_, &SessionController::transcriptChanged, this, &MainWindow::updateTranscript);
-    connect(&session_, &SessionController::levelChanged, this,
-            [this](float value) { meter_->setValue(qRound(value * 100)); });
+    connect(&session_, &SessionController::levelChanged, meter_, &InputLevelMeter::setLevel);
     connect(&session_, &SessionController::connected, this, [this](const QString &address) {
         AppSettings effective = settings_;
         effective.engine.baseUrl = address;
@@ -449,7 +438,6 @@ void MainWindow::startRecognition()
     elapsed_.invalidate();
     time_->setText("00:00");
     contentStack_->setCurrentIndex(0);
-    activeModel_ = snapshot.engine.model;
     activeCacheEnabled_ = snapshot.cache.enabled;
     session_.start(snapshot);
     updateSessionMetadata();
@@ -581,8 +569,6 @@ void MainWindow::setStatus(const QString &label, const QString &detail)
 void MainWindow::updateSessionMetadata()
 {
     const bool active = session_.active();
-    modelHint_->setText(active ? activeModel_ : settings_.engine.model);
-    modelHint_->setToolTip(modelHint_->text());
     cacheHint_->setText((active ? activeCacheEnabled_ : settings_.cache.enabled) ? QStringLiteral("保存录音")
                                                                                  : QStringLiteral("不保存录音"));
 }
@@ -594,6 +580,8 @@ void MainWindow::applyTheme()
     setStyleSheet(themeStyleSheet(dark));
     settingsWindow_->applyTheme(settings_.theme);
     transcript_->setProperty("dark", dark);
+    meter_->setProperty("dark", dark);
+    meter_->update();
     cacheHint_->setToolTip(QStringLiteral("仅指本地录音缓存；语音仍会发送至所配置的识别服务。"));
     for (auto *b : findChildren<QToolButton *>()) {
         const QString name = b->property("iconName").toString();
@@ -640,11 +628,16 @@ void MainWindow::renderTranscript(int index)
     format.setFont(uiFont());
     format.setForeground(item.interim && !item.correcting ? t.secondaryText : t.text);
     QTextBlockFormat paragraph;
-    paragraph.setTopMargin(18);
+    paragraph.setTopMargin(item.interim ? 18 : 0);
     paragraph.setBottomMargin(6);
     paragraph.setLineHeight(22, QTextBlockFormat::FixedHeight);
     cursor.setBlockFormat(paragraph);
     cursor.block().setUserState(item.interim ? 1 : 0);
+    if (index == 0) {
+        auto rootFormat = transcript_->document()->rootFrame()->frameFormat();
+        rootFormat.setTopMargin(item.interim ? 18 : 0);
+        transcript_->document()->rootFrame()->setFrameFormat(rootFormat);
+    }
     // Keep one document block per round even when a result contains line breaks.
     QString text = item.text;
     text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));

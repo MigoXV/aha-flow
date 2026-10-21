@@ -16,6 +16,7 @@
 #include <QLineEdit>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QProgressBar>
 #include <QRawFont>
 #include <QScrollBar>
 #include <QScrollArea>
@@ -253,7 +254,7 @@ class UiTest final : public QObject
         QCOMPARE(document->blockCount(), 2);
         const auto first = document->firstBlock();
         const auto second = first.next();
-        QCOMPARE(first.blockFormat().topMargin(), 18.0);
+        QCOMPARE(first.blockFormat().topMargin(), 0.0);
         QCOMPARE(first.blockFormat().bottomMargin(), 6.0);
         QCOMPARE(first.blockFormat().lineHeight(), 22.0);
         QCOMPARE(first.blockFormat().lineHeightType(), int(QTextBlockFormat::FixedHeight));
@@ -265,7 +266,7 @@ class UiTest final : public QObject
         QCOMPARE(lastLine.y() - firstLine.y(), 22.0);
         const qreal lastBaseline = firstBounds.top() + lastLine.y() + lastLine.ascent();
         const qreal nextBaseline = secondBounds.top() + nextLine.y() + nextLine.ascent();
-        QCOMPARE(nextBaseline - lastBaseline, 40.0);
+        QCOMPARE(nextBaseline - lastBaseline, 28.0);
         QTextCursor selection(document);
         selection.setPosition(0);
         selection.setPosition(3, QTextCursor::KeepAnchor);
@@ -446,6 +447,57 @@ class UiTest final : public QObject
         QCOMPARE(window.size(), manual);
         window.session()->transcriptChanged({"more", "继续转写", true, false, false, {}});
         QCOMPARE(window.size(), manual);
+    }
+    void inputLevelChangesAreVisible()
+    {
+        for (const bool dark : {false, true}) {
+            aha::AppSettings settings;
+            settings.theme = dark ? "abyssus" : "vallum";
+            settings.engine.model = "uxspeech-flow";
+            aha::MainWindow window(settings, false);
+            window.show();
+            window.session()->started();
+            QTest::qWait(20);
+            auto *meter = window.findChild<QProgressBar *>("inputLevel");
+            QVERIFY(meter);
+            QVERIFY(meter->width() >= 180);
+            for (auto *label : window.findChildren<QLabel *>())
+                QVERIFY(label->text() != QStringLiteral("uxspeech-flow"));
+            int previousFilled = -1;
+            for (const float level : {0.0f, 0.006f, 0.14f, 0.63f, 0.0f}) {
+                window.session()->levelChanged(level);
+                QTest::qWait(5);
+                const QImage pixels = meter->grab().toImage();
+                const QColor fill = aha::theme(dark).strongAccent;
+                int filled = 0;
+                for (int x = 0; x < pixels.width(); ++x)
+                    filled += pixels.pixelColor(x, pixels.height() / 2) == fill;
+                const int expected = qRound(meter->width() * meter->value() / qreal(meter->maximum()));
+                QVERIFY(qAbs(filled - qRound(expected * pixels.devicePixelRatio())) <= 1);
+                QVERIFY(filled != previousFilled);
+                previousFilled = filled;
+                const QString captures = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+                if (!captures.isEmpty()) {
+                    QDir().mkpath(captures);
+                    window.grab().save(QDir(captures).filePath(
+                        QStringLiteral("meter-%1-%2.png").arg(dark ? "dark" : "light").arg(meter->value())));
+                }
+            }
+            window.session()->levelChanged(0.8f);
+            window.session()->statusChanged(QStringLiteral("错误"), QStringLiteral("服务不可达"));
+            QCOMPARE(meter->value(), 0);
+        }
+    }
+    void finalizedTextHasNoStageLabelSpace()
+    {
+        aha::AppSettings settings;
+        aha::MainWindow window(settings, false);
+        auto *text = window.findChild<QTextEdit *>("transcript");
+        window.session()->transcriptChanged({"one", "实时预览", false, true, false, {}});
+        QCOMPARE(text->document()->firstBlock().blockFormat().topMargin(), 18.0);
+        window.session()->transcriptChanged({"one", "这是已确认的文字。", true, false, false, {}});
+        QCOMPARE(text->document()->firstBlock().blockFormat().topMargin(), 0.0);
+        QCOMPARE(text->document()->toPlainText(), QStringLiteral("这是已确认的文字。"));
     }
     void bundledIconsRenderWithoutOptionalPlugins()
     {

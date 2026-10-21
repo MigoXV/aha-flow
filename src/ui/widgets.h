@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QLabel>
 #include <QPushButton>
+#include <QProgressBar>
 #include <QTextEdit>
 
 namespace aha
@@ -36,7 +37,18 @@ class SessionTimeLabel final : public QLabel
     void paintEvent(QPaintEvent *event) override;
 };
 
-// Draw state labels outside selectable text, preserving clean transcript copying.
+// Paint every measured change without native progress-bar chunk/repaint thresholds.
+class InputLevelMeter final : public QProgressBar
+{
+  public:
+    explicit InputLevelMeter(QWidget *parent);
+    void setLevel(float level);
+
+  protected:
+    void paintEvent(QPaintEvent *event) override;
+};
+
+// Draw the live-result label outside selectable text, keeping finalized text plain.
 class TranscriptView final : public QTextEdit
 {
   public:

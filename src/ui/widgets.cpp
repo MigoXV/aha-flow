@@ -5,6 +5,7 @@
 #include <QSvgRenderer>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <cmath>
 
 namespace aha
 {
@@ -40,6 +41,31 @@ void SessionTimeLabel::paintEvent(QPaintEvent *)
     }
 }
 
+InputLevelMeter::InputLevelMeter(QWidget *parent) : QProgressBar(parent)
+{
+    setRange(0, 1000);
+    setValue(0);
+    setTextVisible(false);
+    setFixedHeight(4);
+    setMinimumWidth(64);
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    connect(this, &QProgressBar::valueChanged, this, [this] { update(); });
+}
+
+void InputLevelMeter::setLevel(float level)
+{
+    setValue(std::isfinite(level) ? qRound(qBound(0.0f, level, 1.0f) * maximum()) : 0);
+}
+
+void InputLevelMeter::paintEvent(QPaintEvent *)
+{
+    const auto &t = theme(property("dark").toBool());
+    QPainter p(this);
+    p.fillRect(rect(), t.border);
+    const int filled = qRound(width() * qreal(value()) / maximum());
+    p.fillRect(QRect(0, 0, filled, height()), t.strongAccent);
+}
+
 void TranscriptView::paintEvent(QPaintEvent *event)
 {
     QTextEdit::paintEvent(event);
@@ -50,10 +76,9 @@ void TranscriptView::paintEvent(QPaintEvent *event)
         const QRect line = cursorRect(QTextCursor(block));
         if (line.top() > viewport()->height() + 18)
             break;
-        if (line.bottom() < 0 || block.text().isEmpty())
+        if (line.bottom() < 0 || block.text().isEmpty() || block.userState() != 1)
             continue;
-        p.drawText(QRect(0, line.top() - 18, viewport()->width(), 16), Qt::AlignVCenter,
-                   block.userState() == 1 ? QStringLiteral("实时转写") : QStringLiteral("已确认"));
+        p.drawText(QRect(0, line.top() - 18, viewport()->width(), 16), Qt::AlignVCenter, QStringLiteral("实时转写"));
     }
 }
 

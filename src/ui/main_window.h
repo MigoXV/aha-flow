@@ -10,7 +10,6 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
-class QProgressBar;
 class QSpinBox;
 class QStackedLayout;
 class QTextEdit;
@@ -20,6 +19,7 @@ class QTimer;
 namespace aha
 {
 class SettingsWindow;
+class InputLevelMeter;
 class MainWindow final : public QWidget
 {
     Q_OBJECT
@@ -59,7 +59,7 @@ class MainWindow final : public QWidget
     QElapsedTimer elapsed_;
     QList<Transcript> items_;
     QString statusLabel_ = QStringLiteral("待机");
-    QString statusDetailText_, activeModel_;
+    QString statusDetailText_;
     bool activeCacheEnabled_ = true;
     QString runtimeEngine_, runtimeKey_;
     bool runtimeSelfSigned_ = false;
@@ -76,7 +76,7 @@ class MainWindow final : public QWidget
     QLabel *emptyTitle_, *emptyHelp_;
     QWidget *header_, *body_, *brand_;
     QLabel *dot_, *caption_, *status_, *time_, *modelsError_, *historyHint_;
-    QLabel *statusDot_, *statusDetail_, *modelHint_, *cacheHint_;
+    QLabel *statusDot_, *statusDetail_, *cacheHint_;
     QToolButton *record_, *compactRecord_, *settingsButton_, *expandButton_;
     QComboBox *address_, *models_;
     QLineEdit *language_, *apiKey_, *correctionUrl_, *cacheDirectory_;
@@ -84,7 +84,7 @@ class MainWindow final : public QWidget
     QSpinBox *sliceSeconds_;
     SettingsWindow *settingsWindow_ = nullptr;
     QTextEdit *transcript_;
-    QProgressBar *meter_;
+    InputLevelMeter *meter_;
     QTimer *modelsTimer_;
 };
 } // namespace aha
