@@ -49,7 +49,7 @@ class UiTest final : public QObject
     {
         QCoreApplication::setOrganizationName("aha-flow-tests");
         QCoreApplication::setApplicationName("ui-tests");
-        QCoreApplication::setApplicationVersion("0.2.0");
+        QCoreApplication::setApplicationVersion("0.3.0");
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory_.path());
         QApplication::setFont(aha::uiFont());
