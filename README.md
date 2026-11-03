@@ -92,6 +92,39 @@ Qt 6 自动跟随系统显示缩放，Windows 默认支持每显示器 DPI 感�
 
 成功连接的服务地址保留最近 5 条。设置使用系统 `QSettings` 保存；面板中填写的 API Key 也保存在本机配置中，未接入系统密钥库。环境变量 `AHA_FLOW_API_KEY` 和 `--engine` 仅覆盖本次运行，不写回设置。
 
+### Realtime 转写参数
+
+“识别引擎”页包含可展开的“语音活动检测”“识别选项”“输入降噪”。协议以官方 OpenAI Realtime 的 `transcription` 会话为基线，官方服务地址填写 `https://api.openai.com`，从模型列表选择转写模型。音频继续使用 24 kHz、单声道 PCM16LE。
+
+所有新增可选参数默认**不发送**，保留已有服务端行为。每个参数独立控制是否发送；取消发送后仍记住编辑值，下次可重新启用。客户端不按模型名称禁用选项，服务端拒绝时显示错误类型、错误码、参数路径及原始消息，可右键复制完整错误；关闭相关参数后重新开始即可重试。
+
+| 设置 | 协议字段 / 行为 |
+| --- | --- |
+| 断句方式 | 不发送、`server_vad`、`semantic_vad`、关闭；关闭发送 `turn_detection: null` |
+| 音量 VAD 阈值 | `threshold`，滑块 0–1、步长 0.01；越高越需要较强音量触发 |
+| 句首前置音频 | `prefix_padding_ms`，滑块 0–5000 ms，方向键步长 1 ms |
+| 结束静音时长 | `silence_duration_ms`，滑块 100–10000 ms，方向键步长 1 ms |
+| 语义断句积极程度 | `eagerness`，自动、低、中、高；仅在语义断句模式发送 |
+| 语言发送方式 | 不发送、单语言 `language`、多语言 `languages`；语言输入框用逗号分隔多语言 |
+| 识别提示 | `transcription.prompt`，提供背景或术语提示 |
+| 关键词 | `transcription.keywords`，每行一个词或短语 |
+| 出字延迟 | `transcription.delay`，`minimal`、`low`、`medium`、`high`、`xhigh` |
+| 输入降噪 | 不发送、关闭、近场 `near_field`、远场 `far_field`；关闭发送 `noise_reduction: null` |
+| 降噪强度 | `noise_reduction.strength`，滑块 0–1、步长 0.01 |
+| 识别对数概率 | 启用后在 `include` 中请求 `item.input_audio_transcription.logprobs`；返回内容依模型而定 |
+
+时间滑块范围是客户端交互范围，不代表官方 API 限制。“不发送”是省略字段，“关闭”是发送 `null`，不能用数值零替代；选择 VAD 模式后，只发送当前模式对应的已启用字段。旧版本的语言设置会迁移并保持原发送方式，之后由用户显式选择，不随模型切换而锁定。
+
+“查看请求与服务端有效配置”显示最近一次连接的请求及 `session.updated` 返回值，支持选择复制，并过滤密钥字段。连接失败也能查看所请求的配置。服务端接受配置不等于保证某项能力实际输出，未回显的字段不能据此认定已生效。
+
+### 手动结束本轮与停止收尾
+
+展开窗底部提供“结束本轮”，快捷键 **Ctrl+Enter** 在紧凑模式同样可用。它提交当前音频并继续采集下一轮；没有待提交音频时不发送空提交。关闭 VAD 或服务端默认关闭 VAD 的模型，需要主动提交才能完成一轮。
+
+正常停止录音或 PCM 回放结束时，客户端先发送转换器尾包，提交尚未提交的音频，最多等待 30 秒接收最终转写及纠错结果，然后关闭连接并完成缓存。小于 100 ms 的非空待提交音频补静音至 100 ms，补入的静音也记录在原始缓存中。超时或提交失败会明确提示，已完成结果保留。切换会话或关闭窗口可取消正在进行的收尾，旧会话事件不会覆盖新会话。
+
+没有有效音频时间边界的转写仍可显示，也会保存原始录音；不会为手动提交的结果伪造 VAD 分段边界。
+
 同一轮的中间预览随 revision 更新；`interim_cleared` 后保留已有预览，正式增量到达后替换预览。物理停顿显示“语义轮次未结束”，语义结束后显示“转写中”，最终结果固定为一段文本。
 
 启用纠错后，按轮次调用 Responses SSE 接口，使用 `AgenticASR-Refiner`、`temperature=0`、`stream=true`、`store=false`。纠错增量显示进度提示，正文保持主题文字色，隐藏 `<KEY>` 实体标记；超时、截断、空结果或请求失败时恢复识别原文并显示原因。识别 API Key 不发送给纠错服务。
@@ -150,7 +183,7 @@ Qt 6 自动跟随系统显示缩放，Windows 默认支持每显示器 DPI 感�
 # 或 --no-cache；两项缓存参数用于本次回放，不修改设置
 ```
 
-回放结束后等待 30 秒接收最终结果，再收尾退出。GUI 的缓存配置请使用设置面板。
+回放结束后提交剩余音频，最多等待 30 秒接收最终结果及纠错，再收尾退出。GUI 的缓存配置请使用设置面板。
 
 ## 验证与性能
 
@@ -167,6 +200,23 @@ AHA_FLOW_LIVE_CORRECTION_URL=http://192.168.0.222:10002/v1/responses \
 # 输出窗口首帧耗时；不连接引擎，5 秒后退出
 ./build/release/bin/aha-flow --benchmark
 ```
+
+Realtime 新增离线验证覆盖字段省略与显式关闭、模型无关的参数发送、参数拒绝后取消重试、下一轮音频保留、停止提交与收尾超时，以及双主题滑块与编辑值持久化。
+
+显式执行官方接口检查（会访问网络；音频检查会产生 API 用量）：
+
+```bash
+# 先通过当前进程环境提供 AHA_FLOW_API_KEY；不要把密钥写进命令或仓库。
+AHA_FLOW_LIVE_REALTIME=1 ./build/debug/tests/aha_realtime_tests liveOfficialConfiguration
+# 使用一段 24 kHz、单声道 PCM16LE 短语音；建议结尾保留静音供 VAD 结束。
+AHA_FLOW_LIVE_REALTIME=1 AHA_FLOW_LIVE_PCM=/absolute/path/speech.pcm \
+  ./build/debug/tests/aha_realtime_tests liveOfficialAudio
+# 可用 AHA_FLOW_LIVE_MODEL 指定音频检查模型，默认 gpt-4o-mini-transcribe。
+```
+
+本次官方实测结果见 [Realtime 验证记录](docs/realtime-validation.md)。
+
+配置检查为每种配置建立独立连接，输出接受、拒绝、错误路径及服务端有效配置；模型无权限单独记录。音频检查分别覆盖音量 VAD 和关闭 VAD 后手动提交，使用实际客户端网络实现。CI 默认跳过这些真实接口用例。
 
 2026-10-01，在 Debian 13、Qt 6.8.2、Electron 41.2.0 和同一 Xvfb 显示环境下，Release 版本的一次离线启动测量：
 
