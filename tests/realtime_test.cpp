@@ -237,8 +237,11 @@ class RealtimeTest final : public QObject
                                                       {"code", "unsupported_parameter"},
                                                       {"param", "session.audio.input.turn_detection"},
                                                       {"message", "unsupported; private-test-key"}}}});
-                else
-                    send(peer, {{"type", "session.updated"}, {"session", session}});
+                else {
+                    auto effective = session;
+                    effective.insert("client_secret", QJsonObject{{"value", "private-test-key"}});
+                    send(peer, {{"type", "session.updated"}, {"session", effective}});
+                }
             });
             send(peer, {{"type", "session.created"}});
         });
@@ -254,9 +257,12 @@ class RealtimeTest final : public QObject
         QVERIFY(error.contains("unsupported_parameter"));
         QVERIFY(error.contains("session.audio.input.turn_detection"));
         QVERIFY(!error.contains(config.apiKey));
-        config.realtimeOptions = {};
+        config.realtimeOptions = {{"transcription", QJsonObject{{"prompt", config.apiKey}}}};
         client.start(config);
         QTRY_COMPARE(ready.size(), 1);
+        QVERIFY(!client.effectiveConfiguration().contains("client_secret"));
+        QVERIFY(!QJsonDocument(client.effectiveConfiguration()).toJson().contains(config.apiKey.toUtf8()));
+        QVERIFY(!QJsonDocument(client.requestedConfiguration()).toJson().contains(config.apiKey.toUtf8()));
         client.stop();
     }
 };

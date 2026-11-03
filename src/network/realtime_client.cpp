@@ -28,6 +28,11 @@ RealtimeClient::RealtimeClient(QObject *parent) : QObject(parent)
         }
         const QJsonObject event = document.object();
         const QString type = event.value("type").toString();
+        if ((type == "input_audio_buffer.committed" || type == "input_audio_buffer.speech_started") &&
+            !pendingItems_.contains(event.value("item_id").toString()) && pendingItems_.size() >= 1000) {
+            fail(QStringLiteral("未完成转写轮次超过容量上限"));
+            return;
+        }
         emit protocolEvent(event);
         if (stopping_)
             return;
@@ -102,6 +107,7 @@ void RealtimeClient::start(const EngineConfig &config)
     pendingItems_.clear();
     manualTurns_ = false;
     stopping_ = ready_ = false;
+    emit configurationChanged(requestedConfiguration(), {});
     const QUrl url = config.realtimeUrl();
     if (url.isEmpty()) {
         fail(QStringLiteral("无效的引擎地址"));
@@ -116,7 +122,6 @@ void RealtimeClient::start(const EngineConfig &config)
     QNetworkRequest request(url);
     if (!config.apiKey.trimmed().isEmpty())
         request.setRawHeader("Authorization", "Bearer " + config.apiKey.trimmed().toUtf8());
-    emit configurationChanged(requestedConfiguration(), {});
     deadline_.start(10000);
     socket_.open(request);
 }
