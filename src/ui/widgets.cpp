@@ -7,30 +7,12 @@
 #include <QTextCursor>
 #include <cmath>
 #include <QListView>
-#include <QProxyStyle>
 #include <QSignalBlocker>
 
 namespace aha
 {
-namespace
-{
-class ComboListStyle final : public QProxyStyle
-{
-  public:
-    int styleHint(StyleHint hint, const QStyleOption *option = nullptr, const QWidget *widget = nullptr,
-                  QStyleHintReturn *data = nullptr) const override
-    {
-        if (hint == QStyle::SH_ComboBox_Popup)
-            return false;
-        return QProxyStyle::styleHint(hint, option, widget, data);
-    }
-};
-} // namespace
 IconComboBox::IconComboBox(QWidget *parent) : QComboBox(parent)
 {
-    auto *listStyle = new ComboListStyle;
-    listStyle->setParent(this);
-    setStyle(listStyle);
     setMaxVisibleItems(8);
     auto *list = new QListView(this);
     list->setUniformItemSizes(true);

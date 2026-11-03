@@ -159,7 +159,7 @@ QString themeStyleSheet(bool dark)
         }
         QLineEdit:focus, QComboBox:focus { border: 1.5px solid @focus; }
         QLineEdit:disabled, QComboBox:disabled { background: @subtle; color: @secondary; }
-        QComboBox { padding-right: 28px; }
+        QComboBox { padding-right: 28px; combobox-popup: 0; }
         QComboBox QLineEdit { background: transparent; border: 0; padding: 0; }
         QComboBox::drop-down { border: 0; width: 28px; }
         QComboBox::down-arrow { image: none; width: 0; height: 0; }
