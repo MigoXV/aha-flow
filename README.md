@@ -96,6 +96,10 @@ Qt 6 自动跟随系统显示缩放，Windows 默认支持每显示器 DPI 感�
 
 “识别引擎”页包含可展开的“语音活动检测”“识别选项”“输入降噪”。协议以官方 OpenAI Realtime 的 `transcription` 会话为基线，官方服务地址填写 `https://api.openai.com`，从模型列表选择转写模型。音频继续使用 24 kHz、单声道 PCM16LE。
 
+服务主机为 `api.openai.com` 时，模型列表仅显示内置的 Realtime 转写模型系列与日期快照，并与 `/v1/models` 返回结果取交集；不列出聊天、语音合成、嵌入或语音对话模型。旧的不可用选择会切换为列表中的首个转写模型；空列表明确提示。第三方服务不应用官方模型过滤。该过滤仅约束模型用途，不按模型锁定 VAD 等可选参数，账号权限和参数支持仍以服务端响应为准。内置系列包括 `whisper-1`、`gpt-4o-transcribe`、`gpt-4o-mini-transcribe`、`gpt-4o-transcribe-diarize`、`gpt-live-transcribe`、`gpt-transcribe` 和 `gpt-realtime-whisper`。
+
+所有滑杆统一使用圆形滑块；连续数值和有序档位均支持键盘调整，档位仍按官方枚举字符串发送，原设置值无需迁移。
+
 所有新增可选参数默认**不发送**，保留已有服务端行为。每个参数独立控制是否发送；取消发送后仍记住编辑值，下次可重新启用。客户端不按模型名称禁用选项，服务端拒绝时显示错误类型、错误码、参数路径及原始消息，可右键复制完整错误；关闭相关参数后重新开始即可重试。
 
 | 设置 | 协议字段 / 行为 |
@@ -104,11 +108,11 @@ Qt 6 自动跟随系统显示缩放，Windows 默认支持每显示器 DPI 感�
 | 音量 VAD 阈值 | `threshold`，滑块 0–1、步长 0.01；越高越需要较强音量触发 |
 | 句首前置音频 | `prefix_padding_ms`，滑块 0–5000 ms，方向键步长 1 ms |
 | 结束静音时长 | `silence_duration_ms`，滑块 100–10000 ms，方向键步长 1 ms |
-| 语义断句积极程度 | `eagerness`，自动、低、中、高；仅在语义断句模式发送 |
+| 语义断句积极程度 | `eagerness`，带刻度滑杆选择低、中、高、自动；仅在语义断句模式发送 |
 | 语言发送方式 | 不发送、单语言 `language`、多语言 `languages`；语言输入框用逗号分隔多语言 |
 | 识别提示 | `transcription.prompt`，提供背景或术语提示 |
 | 关键词 | `transcription.keywords`，每行一个词或短语 |
-| 出字延迟 | `transcription.delay`，`minimal`、`low`、`medium`、`high`、`xhigh` |
+| 出字延迟 | `transcription.delay`，带刻度滑杆选择 `minimal`、`low`、`medium`、`high`、`xhigh` |
 | 输入降噪 | 不发送、关闭、近场 `near_field`、远场 `far_field`；关闭发送 `noise_reduction: null` |
 | 降噪强度 | `noise_reduction.strength`，滑块 0–1、步长 0.01 |
 | 识别对数概率 | 启用后在 `include` 中请求 `item.input_audio_transcription.logprobs`；返回内容依模型而定 |
