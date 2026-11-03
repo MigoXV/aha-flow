@@ -3,6 +3,7 @@
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 #include <QWebSocketServer>
 #include <QWebSocket>
 
@@ -68,6 +69,66 @@ class SessionTest final : public QObject
         QVERIFY(cache.at(1).at(0).toString().startsWith(directory.filePath("second")));
         controller.shutdown();
         QTRY_COMPARE_WITH_TIMEOUT(closing.size(), 1, 5000);
+    }
+    void manualStopWaitsForFinalResult_data()
+    {
+        QTest::addColumn<bool>("respond");
+        QTest::newRow("final-result") << true;
+        QTest::newRow("timeout") << false;
+    }
+    void manualStopWaitsForFinalResult()
+    {
+        QFETCH(bool, respond);
+        QTemporaryDir directory;
+        QFile pcm(directory.filePath("manual.pcm"));
+        QVERIFY(pcm.open(QIODevice::WriteOnly));
+        pcm.write(QByteArray(9600, '\0'));
+        pcm.close();
+        QWebSocketServer server("manual", QWebSocketServer::NonSecureMode);
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        int commits = 0;
+        connect(&server, &QWebSocketServer::newConnection, &server, [&] {
+            auto *socket = server.nextPendingConnection();
+            connect(socket, &QWebSocket::disconnected, socket, &QObject::deleteLater);
+            connect(socket, &QWebSocket::textMessageReceived, socket, [&, socket](const QString &text) {
+                const auto event = QJsonDocument::fromJson(text.toUtf8()).object();
+                const auto send = [socket](QJsonObject event) {
+                    socket->sendTextMessage(QString::fromUtf8(QJsonDocument(event).toJson()));
+                };
+                if (event.value("type") == "session.update")
+                    send({{"type", "session.updated"}, {"session", event.value("session")}});
+                if (event.value("type") == "input_audio_buffer.commit") {
+                    ++commits;
+                    send({{"type", "input_audio_buffer.committed"}, {"item_id", "manual"}});
+                    if (respond)
+                        QTimer::singleShot(80, socket, [send] {
+                            send({{"type", "conversation.item.input_audio_transcription.completed"},
+                                  {"item_id", "manual"},
+                                  {"transcript", "手动提交最终结果"}});
+                        });
+                }
+            });
+            socket->sendTextMessage("{\"type\":\"session.created\"}");
+        });
+        aha::AppSettings settings;
+        settings.cache.enabled = false;
+        settings.engine.baseUrl = QString("http://127.0.0.1:%1").arg(server.serverPort());
+        settings.engine.realtimeOptions = {{"turn_detection", QJsonValue::Null}};
+        aha::SessionController controller(nullptr, 200);
+        QSignalSpy status(&controller, &aha::SessionController::statusChanged);
+        QSignalSpy results(&controller, &aha::SessionController::transcriptChanged);
+        QSignalSpy finished(&controller, &aha::SessionController::finished);
+        controller.start(settings, pcm.fileName());
+        QTRY_COMPARE_WITH_TIMEOUT(finished.size(), 1, 5000);
+        QCOMPARE(commits, 1);
+        if (respond) {
+            QCOMPARE(results.size(), 1);
+            QCOMPARE(qvariant_cast<aha::Transcript>(results.first().first()).text, QString("手动提交最终结果"));
+        } else {
+            QCOMPARE(results.size(), 0);
+            QCOMPARE(status.last().first().toString(), QString("错误"));
+            QVERIFY(status.last()[1].toString().contains(QStringLiteral("超时")));
+        }
     }
     void cancelWhileConnecting()
     {

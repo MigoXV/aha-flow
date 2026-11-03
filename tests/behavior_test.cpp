@@ -166,6 +166,30 @@ class BehaviorTest final : public QObject
         qputenv("https_proxy", "https://localhost:3128");
         QVERIFY_EXCEPTION_THROWN(aha::engineProxy(QUrl("https://remote.test")), std::runtime_error);
     }
+    void partialPacketFlushPreservesResampler()
+    {
+        QAudioFormat format;
+        format.setSampleRate(48000);
+        format.setChannelCount(1);
+        format.setSampleFormat(QAudioFormat::Int16);
+        aha::PcmConverter continuous(format), manualTurns(format);
+        QByteArray input(48000, '\0');
+        for (int i = 0; i < input.size(); i += 2)
+            qToLittleEndian<qint16>(qint16(10000 * std::sin(i * 0.03)), input.data() + i);
+        QByteArray expected, actual;
+        for (int offset = 0; offset < input.size(); offset += 1000) {
+            for (const auto &packet : continuous.feed(input.mid(offset, 1000)))
+                expected += packet;
+            for (const auto &packet : manualTurns.feed(input.mid(offset, 1000)))
+                actual += packet;
+            actual += manualTurns.takePacket();
+        }
+        for (const auto &packet : continuous.feed({}, true))
+            expected += packet;
+        for (const auto &packet : manualTurns.feed({}, true))
+            actual += packet;
+        QCOMPARE(actual, expected);
+    }
     void resamplingAndTail()
     {
         QAudioFormat format;
