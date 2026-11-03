@@ -6,9 +6,71 @@
 #include <QTextBlock>
 #include <QTextCursor>
 #include <cmath>
+#include <QListView>
+#include <QProxyStyle>
+#include <QSignalBlocker>
 
 namespace aha
 {
+namespace
+{
+class ComboListStyle final : public QProxyStyle
+{
+  public:
+    int styleHint(StyleHint hint, const QStyleOption *option = nullptr, const QWidget *widget = nullptr,
+                  QStyleHintReturn *data = nullptr) const override
+    {
+        if (hint == QStyle::SH_ComboBox_Popup)
+            return false;
+        return QProxyStyle::styleHint(hint, option, widget, data);
+    }
+};
+} // namespace
+IconComboBox::IconComboBox(QWidget *parent) : QComboBox(parent)
+{
+    auto *listStyle = new ComboListStyle;
+    listStyle->setParent(this);
+    setStyle(listStyle);
+    setMaxVisibleItems(8);
+    auto *list = new QListView(this);
+    list->setUniformItemSizes(true);
+    list->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    list->setTextElideMode(Qt::ElideRight);
+    setView(list);
+}
+void IconComboBox::replaceItems(const QStringList &items, const QString &selected)
+{
+    if (popupOpen_) {
+        pendingItems_ = items;
+        pendingUpdate_ = true;
+        return;
+    }
+    pendingUpdate_ = false;
+    const QSignalBlocker blocker(this);
+    clear();
+    if (!selected.isEmpty() && !items.contains(selected))
+        addItem(selected);
+    addItems(items);
+    setCurrentText(selected);
+}
+void IconComboBox::showPopup()
+{
+    popupOpen_ = true;
+    QComboBox::showPopup();
+}
+void IconComboBox::hidePopup()
+{
+    QComboBox::hidePopup();
+    popupOpen_ = false;
+    // Selection activation is delivered after hidePopup. Apply after it, preserving the user's choice.
+    QTimer::singleShot(0, this, [this] {
+        if (!popupOpen_ && pendingUpdate_) {
+            pendingUpdate_ = false;
+            replaceItems(pendingItems_, currentText());
+        }
+    });
+}
 void IconComboBox::paintEvent(QPaintEvent *event)
 {
     QComboBox::paintEvent(event);

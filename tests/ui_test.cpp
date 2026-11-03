@@ -1,6 +1,8 @@
 #include "ui/main_window.h"
 #include "ui/settings_window.h"
 #include "ui/theme.h"
+#include "ui/widgets.h"
+#include <QAbstractItemView>
 #include <QCheckBox>
 #include <QAbstractTextDocumentLayout>
 #include <QDialog>
@@ -50,6 +52,44 @@ class UiTest final : public QObject
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory_.path());
         QApplication::setFont(aha::uiFont());
+    }
+    void modelPopupStaysBoundedDuringRefresh()
+    {
+        for (const auto &theme : {"vallum", "abyssus"}) {
+            aha::AppSettings settings;
+            settings.theme = theme;
+            aha::SettingsWindow dialog(settings, nullptr);
+            dialog.show();
+            auto *combo = qobject_cast<QComboBox *>(dialog.findChild<QComboBox *>("model"));
+            auto *models = static_cast<aha::IconComboBox *>(combo);
+            QStringList items;
+            for (int i = 0; i < 200; ++i)
+                items.append(QString("model-%1").arg(i));
+            models->replaceItems(items, "model-0");
+            QTest::mouseClick(models, Qt::LeftButton);
+            QCoreApplication::processEvents();
+            QVERIFY(models->view()->isVisible());
+            QVERIFY(models->view()->height() <= models->view()->sizeHintForRow(0) * 8 + 4);
+            QVERIFY(models->view()->verticalScrollBar()->maximum() > 0);
+            auto refreshed = items;
+            refreshed.append("new-model");
+            models->replaceItems(refreshed, "model-0");
+            dialog.fitToContents();
+            QTest::qWait(30);
+            QVERIFY(models->view()->isVisible());
+            QCOMPARE(models->count(), 200);
+            models->setCurrentIndex(7);
+            models->hidePopup();
+            QCoreApplication::processEvents();
+            QCOMPARE(models->count(), 201);
+            QCOMPARE(models->currentText(), QString("model-7"));
+            models->showPopup();
+            QCoreApplication::processEvents();
+            QTest::keyClick(models->view(), Qt::Key_Down);
+            QTest::keyClick(models->view(), Qt::Key_Return);
+            QTRY_VERIFY(!models->view()->isVisible());
+            QCOMPARE(models->currentText(), QString("model-8"));
+        }
     }
     void realtimeSlidersAndOmission()
     {

@@ -375,12 +375,7 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     });
     connect(close, &QToolButton::clicked, this, &QWidget::close);
     connect(&engine_, &EngineClient::modelsReady, this, [this](const QStringList &models) {
-        const QSignalBlocker blocker(models_);
-        models_->clear();
-        if (!models.contains(settings_.engine.model))
-            models_->addItem(settings_.engine.model);
-        models_->addItems(models);
-        models_->setCurrentText(settings_.engine.model);
+        static_cast<IconComboBox *>(models_)->replaceItems(models, settings_.engine.model);
         modelsError_->setText(models.isEmpty() ? QStringLiteral("服务端没有可用模型") : QString());
         modelsError_->setVisible(models.isEmpty());
     });
