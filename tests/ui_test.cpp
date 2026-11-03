@@ -3,6 +3,7 @@
 #include "ui/theme.h"
 #include "ui/widgets.h"
 #include <QAbstractItemView>
+#include <QStyleOptionSlider>
 #include <QCheckBox>
 #include <QAbstractTextDocumentLayout>
 #include <QDialog>
@@ -89,6 +90,71 @@ class UiTest final : public QObject
             QTest::keyClick(models->view(), Qt::Key_Return);
             QTRY_VERIFY(!models->view()->isVisible());
             QCOMPARE(models->currentText(), QString("model-8"));
+            models->showPopup();
+            models->replaceItems({"whisper-1", "gpt-live-transcribe"}, "whisper-1", false);
+            models->hidePopup();
+            QCoreApplication::processEvents();
+            QCOMPARE(models->count(), 2);
+            QCOMPARE(models->currentText(), QString("whisper-1"));
+        }
+    }
+    void steppedSlidersPreserveProtocolValues()
+    {
+        for (const auto &theme : {"vallum", "abyssus"}) {
+            aha::AppSettings settings;
+            settings.theme = theme;
+            aha::SettingsWindow dialog(settings, nullptr);
+            QSignalSpy changed(&dialog, &aha::SettingsWindow::realtimeChanged);
+            auto *vad = dialog.findChild<QComboBox *>("__vad");
+            vad->setCurrentIndex(vad->findData("semantic_vad"));
+            for (const auto &path : {QString("turn_detection/eagerness"), QString("transcription/delay")}) {
+                auto *slider = dialog.findChild<QSlider *>(path);
+                QVERIFY(slider);
+                auto *toggle = dialog.findChild<QCheckBox *>(path + "/send");
+                QVERIFY(toggle);
+                toggle->setChecked(true);
+                const auto values = path.endsWith("eagerness")
+                                        ? QStringList{"low", "medium", "high", "auto"}
+                                        : QStringList{"minimal", "low", "medium", "high", "xhigh"};
+                const auto parts = path.split('/');
+                for (int i = 0; i < values.size(); ++i) {
+                    slider->setValue(i);
+                    QCOMPARE(changed.last()[0].toJsonObject().value(parts[0]).toObject().value(parts[1]).toString(),
+                             values[i]);
+                }
+                toggle->setChecked(false);
+                QVERIFY(!changed.last()[0].toJsonObject().value(parts[0]).toObject().contains(parts[1]));
+                settings.engine.realtimeDraft = changed.last()[1].toJsonObject();
+                settings.engine.realtimeOptions = changed.last()[0].toJsonObject();
+            }
+            aha::SettingsWindow restored(settings, nullptr);
+            QCOMPARE(restored.findChild<QSlider *>("transcription/delay")->value(), 4);
+            QVERIFY(!restored.findChild<QSlider *>("transcription/delay")->isEnabled());
+            dialog.show();
+            auto *slider = dialog.findChild<QSlider *>("transcription/delay");
+            QStyleOptionSlider option;
+            option.initFrom(slider);
+            option.orientation = Qt::Horizontal;
+            option.minimum = slider->minimum();
+            option.maximum = slider->maximum();
+            option.sliderPosition = slider->value();
+            const auto handle =
+                slider->style()->subControlRect(QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, slider);
+            QCOMPARE(handle.width(), handle.height());
+            const auto captures = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+            if (!captures.isEmpty()) {
+                QDir().mkpath(captures);
+                for (auto *button : dialog.findChildren<QToolButton *>())
+                    if (button->text() == QStringLiteral("语音活动检测"))
+                        button->setChecked(true);
+                auto *eagerness = dialog.findChild<QSlider *>("turn_detection/eagerness");
+                dialog.findChild<QCheckBox *>("turn_detection/eagerness/send")->setChecked(true);
+                auto *scroll = qobject_cast<QScrollArea *>(dialog.findChild<QTabWidget *>("settingsTabs")->widget(0));
+                QCoreApplication::processEvents();
+                scroll->ensureWidgetVisible(eagerness);
+                QCoreApplication::processEvents();
+                dialog.grab().save(QDir(captures).filePath(QString("stepped-%1.png").arg(theme)));
+            }
         }
     }
     void realtimeSlidersAndOmission()

@@ -331,32 +331,45 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     auto *semanticLayout = new QVBoxLayout(semantic);
     semanticLayout->setContentsMargins(0, 0, 0, 0);
     vad->addWidget(semantic);
-    const auto segmented = [this, initial, optional, setValue](QVBoxLayout *layout, const QString &title,
-                                                               const QString &path, const QStringList &labels,
-                                                               const QStringList &values, const QString &fallback) {
+    const auto steppedSlider = [this, initial, optional, setValue](QVBoxLayout *layout, const QString &title,
+                                                                   const QString &path, const QStringList &labels,
+                                                                   const QStringList &values, const QString &fallback) {
         auto *row = new QWidget;
-        auto *horizontal = new QHBoxLayout(row);
-        horizontal->setContentsMargins(0, 0, 0, 0);
-        horizontal->setSpacing(2);
-        auto *buttons = new QButtonGroup(row);
-        buttons->setExclusive(true);
-        const QString selected = initial(path, fallback).value("value").toString();
-        for (int i = 0; i < values.size(); ++i) {
-            auto *button = new QPushButton(labels[i], row);
-            button->setCheckable(true);
-            button->setMinimumHeight(32);
-            button->setObjectName(path + "/" + values[i]);
-            button->setChecked(values[i] == selected);
-            button->setAccessibleName(title + " · " + labels[i]);
-            buttons->addButton(button);
-            horizontal->addWidget(button, 1);
-            connect(button, &QPushButton::clicked, this,
-                    [setValue, path, value = values[i]] { setValue(path, value); });
+        auto *vertical = new QVBoxLayout(row);
+        vertical->setContentsMargins(0, 0, 0, 0);
+        vertical->setSpacing(0);
+        auto *horizontal = new QHBoxLayout;
+        auto *slider = new QSlider(Qt::Horizontal, row);
+        slider->setObjectName(path);
+        slider->setAccessibleName(title);
+        slider->setRange(0, values.size() - 1);
+        slider->setSingleStep(1);
+        slider->setPageStep(1);
+        slider->setTickPosition(QSlider::TicksBelow);
+        slider->setTickInterval(1);
+        slider->setMinimumHeight(32);
+        slider->setValue(qMax(0, values.indexOf(initial(path, fallback).value("value").toString())));
+        auto *current = label(labels[slider->value()], row);
+        current->setMinimumWidth(44);
+        horizontal->addWidget(slider, 1);
+        horizontal->addWidget(current);
+        vertical->addLayout(horizontal);
+        auto *ticks = new QHBoxLayout;
+        for (int i = 0; i < labels.size(); ++i) {
+            auto *tick = label(labels[i], row, true);
+            tick->setAlignment(i == 0 ? Qt::AlignLeft : i == labels.size() - 1 ? Qt::AlignRight : Qt::AlignCenter);
+            ticks->addWidget(tick, 1);
         }
+        vertical->addLayout(ticks);
+        slider->installEventFilter(this);
         optional(layout, title, path, row, fallback);
+        connect(slider, &QSlider::valueChanged, this, [current, labels, values, path, setValue](int index) {
+            current->setText(labels[index]);
+            setValue(path, values[index]);
+        });
     };
-    segmented(semanticLayout, QStringLiteral("语义断句积极程度"), "turn_detection/eagerness",
-              {"自动", "低", "中", "高"}, {"auto", "low", "medium", "high"}, "auto");
+    steppedSlider(semanticLayout, QStringLiteral("语义断句积极程度"), "turn_detection/eagerness",
+                  {"低", "中", "高", "自动"}, {"low", "medium", "high", "auto"}, "auto");
     const auto showVad = [vadMode, server, semantic] {
         server->setVisible(vadMode->currentData() == "server_vad");
         semantic->setVisible(vadMode->currentData() == "semantic_vad");
@@ -396,8 +409,8 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
                 setValue(path, text->toPlainText());
         });
     }
-    segmented(recognition, QStringLiteral("出字延迟"), "transcription/delay", {"极低", "低", "中", "高", "极高"},
-              {"minimal", "low", "medium", "high", "xhigh"}, "medium");
+    steppedSlider(recognition, QStringLiteral("出字延迟"), "transcription/delay", {"极低", "低", "中", "高", "极高"},
+                  {"minimal", "low", "medium", "high", "xhigh"}, "medium");
     auto *probability =
         preference(recognition, QStringLiteral("请求识别对数概率"), QStringLiteral("诊断输出；是否支持由服务端决定。"),
                    initial("logprobs", true).value("enabled").toBool());

@@ -145,9 +145,9 @@ QString themeStyleSheet(bool dark)
         QPushButton:focus { border: 1.5px solid @focus; }
         QSlider::groove:horizontal { height: 4px; background: @border; border-radius: 2px; }
         QSlider::sub-page:horizontal { background: @strongAccent; border-radius: 2px; }
-        QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: @surface;
-            border: 1px solid @strongAccent; border-radius: 6px; }
-        QSlider::handle:horizontal:focus { border: 2px solid @focus; }
+        QSlider::handle:horizontal { width: 14px; margin: -6px 0; background: @surface;
+            border: 1px solid @strongAccent; border-radius: 8px; }
+        QSlider::handle:horizontal:focus { border: 1px solid @focus; background: @strongAccent; }
         QSlider::handle:horizontal:disabled { background: @subtle; border-color: @border; }
         QSlider::sub-page:horizontal:disabled { background: @border; }
         QPushButton:checked { background: @hover; border-color: @strongAccent; }
