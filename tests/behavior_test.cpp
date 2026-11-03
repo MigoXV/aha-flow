@@ -27,7 +27,10 @@ class BehaviorTest final : public QObject
         QVERIFY(settings.engine.allowUntrustedCertificate);
         settings.cache.rootDirectory = directory.path();
         settings.cache.rawSliceSeconds = 17;
-        settings.engine.language = "zh";
+        settings.engine.language = "zh,en";
+        settings.engine.languageMode = "multiple";
+        settings.engine.realtimeOptions = {{"turn_detection", QJsonValue::Null}};
+        settings.engine.realtimeDraft = {{"turn_detection/threshold", QJsonObject{{"enabled", false}, {"value", 0.7}}}};
         settings.engine.apiKey = "local-test-key";
         settings.correction.enabled = true;
         settings.rememberServer();
@@ -35,6 +38,9 @@ class BehaviorTest final : public QObject
         const auto loaded = aha::AppSettings::load(store);
         QCOMPARE(loaded.cache.rootDirectory, directory.path());
         QCOMPARE(loaded.cache.rawSliceSeconds, 17);
+        QCOMPARE(loaded.engine.languageMode, QString("multiple"));
+        QCOMPARE(loaded.engine.realtimeOptions, settings.engine.realtimeOptions);
+        QCOMPARE(loaded.engine.realtimeDraft, settings.engine.realtimeDraft);
         QCOMPARE(loaded.engine.apiKey, QStringLiteral("local-test-key"));
         QVERIFY(loaded.validate().isEmpty());
         settings.cache.rootDirectory = "relative";

@@ -79,21 +79,26 @@ QString TranscriptionState::status() const
     return turns_.isEmpty() ? QStringLiteral("等待中") : QStringLiteral("转写中");
 }
 
-QJsonObject sessionUpdate(const QString &model, const QString &language)
+QJsonObject sessionUpdate(const EngineConfig &config)
 {
-    QJsonObject transcription{{"model", model}};
-    if (!language.trimmed().isEmpty()) {
-        if (model == "gpt-live-transcribe" || model.startsWith("gpt-live-transcribe-"))
-            transcription.insert("languages", QJsonArray{language.trimmed()});
-        else
-            transcription.insert("language", language.trimmed());
+    QJsonObject input = config.realtimeOptions;
+    QJsonObject transcription = input.take("transcription").toObject();
+    transcription.insert("model", config.model);
+    if (config.languageMode != "omit" && !config.language.trimmed().isEmpty()) {
+        if (config.languageMode == "multiple") {
+            QJsonArray languages;
+            for (const auto &language : config.language.split(',', Qt::SkipEmptyParts))
+                languages.append(language.trimmed());
+            transcription.insert("languages", languages);
+        } else
+            transcription.insert("language", config.language.trimmed());
     }
-    return {
-        {"type", "session.update"},
-        {"session",
-         QJsonObject{{"type", "transcription"},
-                     {"audio",
-                      QJsonObject{{"input", QJsonObject{{"format", QJsonObject{{"type", "audio/pcm"}, {"rate", 24000}}},
-                                                        {"transcription", transcription}}}}}}}};
+    QJsonObject session{{"type", "transcription"}};
+    if (input.take("logprobs").toBool())
+        session.insert("include", QJsonArray{"item.input_audio_transcription.logprobs"});
+    input.insert("format", QJsonObject{{"type", "audio/pcm"}, {"rate", 24000}});
+    input.insert("transcription", transcription);
+    session.insert("audio", QJsonObject{{"input", input}});
+    return {{"type", "session.update"}, {"session", session}};
 }
 } // namespace aha

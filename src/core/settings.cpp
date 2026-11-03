@@ -1,5 +1,6 @@
 #include "core/settings.h"
 #include <QDir>
+#include <QJsonDocument>
 #include <QStandardPaths>
 
 namespace aha
@@ -16,6 +17,11 @@ AppSettings AppSettings::load(QSettings &store)
     s.engine.baseUrl = store.value("engine/address", s.engine.baseUrl).toString();
     s.engine.model = store.value("engine/model", s.engine.model).toString();
     s.engine.language = store.value("engine/language").toString();
+    s.engine.realtimeOptions = QJsonDocument::fromJson(store.value("engine/realtimeOptions").toByteArray()).object();
+    s.engine.realtimeDraft = QJsonDocument::fromJson(store.value("engine/realtimeDraft").toByteArray()).object();
+    s.engine.languageMode =
+        store.value("engine/languageMode", s.engine.model.startsWith("gpt-live-transcribe") ? "multiple" : "single")
+            .toString();
     s.engine.apiKey = store.value("engine/apiKey").toString();
     s.engine.enableAha = store.value("engine/aha", true).toBool();
     s.engine.allowUntrustedCertificate = store.value("engine/allowSelfSigned", true).toBool();
@@ -37,6 +43,9 @@ void AppSettings::save(QSettings &store) const
     store.setValue("engine/address", engine.baseUrl);
     store.setValue("engine/model", engine.model);
     store.setValue("engine/language", engine.language);
+    store.setValue("engine/realtimeOptions", QJsonDocument(engine.realtimeOptions).toJson(QJsonDocument::Compact));
+    store.setValue("engine/realtimeDraft", QJsonDocument(engine.realtimeDraft).toJson(QJsonDocument::Compact));
+    store.setValue("engine/languageMode", engine.languageMode);
     store.setValue("engine/apiKey", engine.apiKey);
     store.setValue("engine/aha", engine.enableAha);
     store.setValue("engine/allowSelfSigned", engine.allowUntrustedCertificate);
