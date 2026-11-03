@@ -10,7 +10,7 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
-class QSpinBox;
+class QSlider;
 class QStackedLayout;
 class QTextEdit;
 class QToolButton;
@@ -81,7 +81,7 @@ class MainWindow final : public QWidget
     QComboBox *address_, *models_;
     QLineEdit *language_, *apiKey_, *correctionUrl_, *cacheDirectory_;
     QCheckBox *allowUntrusted_, *enableAha_, *enableCorrection_, *enableCache_;
-    QSpinBox *sliceSeconds_;
+    QSlider *sliceSeconds_;
     SettingsWindow *settingsWindow_ = nullptr;
     QTextEdit *transcript_;
     InputLevelMeter *meter_;

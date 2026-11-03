@@ -17,7 +17,11 @@
 #include <QScreen>
 #include <QScrollBar>
 #include <QSignalBlocker>
-#include <QSpinBox>
+#include <QSlider>
+#include <QShortcut>
+#include <QAction>
+#include <QClipboard>
+#include <QApplication>
 #include <QStackedLayout>
 #include <QStyle>
 #include <QTextBlock>
@@ -156,11 +160,16 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     statusDetail_ = caption({}, content);
     statusDetail_->setObjectName("statusDetail");
     statusDetail_->setWordWrap(true);
+    statusDetail_->setContextMenuPolicy(Qt::ActionsContextMenu);
+    statusDetail_->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     statusDetail_->setMinimumWidth(0);
     statusDetail_->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
     statusDetail_->setMaximumHeight(66);
     statusDetail_->hide();
     contentLayout->addWidget(statusDetail_);
+    auto *copyError = new QAction(QStringLiteral("复制完整错误"), statusDetail_);
+    statusDetail_->addAction(copyError);
+    connect(copyError, &QAction::triggered, this, [this] { QApplication::clipboard()->setText(statusDetailText_); });
     contentStack_ = new QStackedLayout;
     auto *empty = new QWidget(content);
     auto *emptyLayout = new QVBoxLayout(empty);
@@ -218,7 +227,10 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     cacheHint_->setFont(uiFont(11));
     cacheHint_->setMinimumHeight(16);
     meta->addLayout(levelRow);
-    meta->addWidget(cacheHint_);
+    auto *cacheRow = new QHBoxLayout;
+    cacheRow->setSpacing(4);
+    cacheRow->addWidget(cacheHint_, 1);
+    meta->addLayout(cacheRow);
     actions->addLayout(meta, 1);
     record_ = button("mic", QStringLiteral("开始识别"), footer);
     record_->setObjectName("recordButton");
@@ -313,7 +325,33 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
         settings_.cache.rootDirectory = value;
         saveSettings();
     });
-    connect(sliceSeconds_, qOverload<int>(&QSpinBox::valueChanged), this, [this](int value) {
+    connect(settingsWindow_, &SettingsWindow::realtimeChanged, this,
+            [this](const QJsonObject &options, const QJsonObject &draft, const QString &languageMode) {
+                settings_.engine.realtimeOptions = options;
+                settings_.engine.realtimeDraft = draft;
+                settings_.engine.languageMode = languageMode;
+                saveSettings();
+            });
+    connect(&session_, &SessionController::configurationChanged, settingsWindow_,
+            &SettingsWindow::setSessionConfiguration);
+    auto *commit = new QToolButton(this);
+    commit->setText(QStringLiteral("结束本轮"));
+    commit->setObjectName("commitTurn");
+    commit->setAccessibleName(QStringLiteral("结束本轮（Ctrl+Enter）"));
+    commit->setToolTip(QStringLiteral("结束本轮（Ctrl+Enter）；继续采集下一轮"));
+    auto *commitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
+    connect(commitShortcut, &QShortcut::activated, &session_, &SessionController::commitTurn);
+    commit->setEnabled(false);
+    commit->setFixedHeight(20);
+    commit->setFont(uiFont(11));
+    cacheRow->addWidget(commit);
+    connect(commit, &QToolButton::clicked, &session_, &SessionController::commitTurn);
+    connect(&session_, &SessionController::started, commit, [commit] { commit->setEnabled(true); });
+    connect(&session_, &SessionController::statusChanged, commit, [commit](const QString &label, const QString &) {
+        if (label == QStringLiteral("停止中") || label == QStringLiteral("错误") || label == QStringLiteral("待机"))
+            commit->setEnabled(false);
+    });
+    connect(sliceSeconds_, &QSlider::valueChanged, this, [this](int value) {
         settings_.cache.rawSliceSeconds = value;
         saveSettings();
     });
@@ -514,11 +552,11 @@ void MainWindow::setStatus(const QString &label, const QString &detail)
     if (busy || idle || error)
         meter_->clearLevel();
     emptyTitle_->setText(label == QStringLiteral("连接中") ? QStringLiteral("正在连接识别引擎")
-                         : error                           ? QStringLiteral("无法连接识别引擎")
+                         : error                           ? QStringLiteral("识别遇到错误")
                          : idle                            ? QStringLiteral("识别已停止")
                                                            : QStringLiteral("等待语音输入"));
     emptyHelp_->setText(label == QStringLiteral("连接中") ? QStringLiteral("连接成功后启动麦克风采集")
-                        : error                           ? QStringLiteral("检查服务地址与网络，然后重新开始识别")
+                        : error                           ? QStringLiteral("查看错误详情，调整参数或连接配置后重新开始")
                         : idle                            ? QStringLiteral("点击开始识别，重新输入语音")
                                                           : QStringLiteral("实时转写内容将显示在这里"));
     const QColor color = error                                       ? t.danger
@@ -544,7 +582,7 @@ void MainWindow::setStatus(const QString &label, const QString &detail)
     if (error || idle)
         recording_ = false;
     const QString action =
-        busy         ? (label == QStringLiteral("连接中") ? QStringLiteral("连接中…") : QStringLiteral("保存中…"))
+        busy         ? (label == QStringLiteral("连接中") ? QStringLiteral("连接中…") : QStringLiteral("收尾中…"))
         : recording_ ? QStringLiteral("停止识别")
         : error      ? QStringLiteral("重新开始")
                      : QStringLiteral("开始识别");

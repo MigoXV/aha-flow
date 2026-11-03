@@ -8,7 +8,7 @@ class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
-class QSpinBox;
+class QSlider;
 class QScreen;
 class QTabWidget;
 class QToolButton;
@@ -19,7 +19,7 @@ struct SettingsControls {
     QComboBox *address, *models;
     QLineEdit *language, *apiKey, *correctionUrl, *cacheDirectory;
     QCheckBox *allowUntrusted, *enableAha, *enableCorrection, *enableCache;
-    QSpinBox *sliceSeconds;
+    QSlider *sliceSeconds;
     QLabel *modelsError;
     QToolButton *browse;
 };
@@ -35,7 +35,9 @@ class SettingsWindow final : public QDialog
     }
     void applyTheme(const QString &name);
     void fitToContents();
+    void setSessionConfiguration(const QJsonObject &requested, const QJsonObject &effective);
   signals:
+    void realtimeChanged(const QJsonObject &options, const QJsonObject &draft, const QString &languageMode);
     void themeSelected(const QString &name);
 
   protected:
@@ -43,6 +45,8 @@ class SettingsWindow final : public QDialog
     void showEvent(QShowEvent *event) override;
 
   private:
+    void rebuildRealtimeOptions();
+    QJsonObject realtimeDraft_, requested_, effective_;
     SettingsControls controls_{};
     QTabWidget *tabs_;
     void scheduleFit();

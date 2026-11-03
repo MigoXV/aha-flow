@@ -15,7 +15,11 @@
 #include <QScrollBar>
 #include <QScreen>
 #include <QShowEvent>
-#include <QSpinBox>
+#include <QSlider>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QPlainTextEdit>
+#include <QRegularExpression>
 #include <QTabBar>
 #include <QTabWidget>
 #include <QToolButton>
@@ -110,6 +114,7 @@ QVBoxLayout *page(QTabWidget *tabs, const QString &title)
 
 SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : QDialog(parent)
 {
+    realtimeDraft_ = settings.engine.realtimeDraft;
     setObjectName("settingsDialog");
     setWindowTitle(QStringLiteral("aha-flow 设置"));
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
@@ -200,6 +205,240 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     controls_.enableAha = preference(security, QStringLiteral("AHA 扩展协议"),
                                      QStringLiteral("显示中间预览与语义轮次状态。"), settings.engine.enableAha);
 
+    const auto group = [this, engine](const QString &title) {
+        auto *header = new QToolButton;
+        header->setText(title);
+        header->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        header->setArrowType(Qt::RightArrow);
+        header->setCheckable(true);
+        header->setMinimumHeight(32);
+        header->setAccessibleName(title);
+        engine->addWidget(header);
+        auto *body = new QWidget;
+        auto *layout = new QVBoxLayout(body);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(10);
+        engine->addWidget(body);
+        body->hide();
+        connect(header, &QToolButton::toggled, body, [header, body](bool open) {
+            body->setVisible(open);
+            header->setArrowType(open ? Qt::DownArrow : Qt::RightArrow);
+        });
+        return layout;
+    };
+    const auto initial = [this, settings](const QString &path, QJsonValue fallback) {
+        if (realtimeDraft_.contains(path))
+            return realtimeDraft_.value(path).toObject();
+        QJsonValue wire = settings.engine.realtimeOptions;
+        for (const auto &part : path.split('/'))
+            wire = wire.toObject().value(part);
+        QJsonObject entry{{"enabled", !wire.isUndefined()}, {"value", wire.isUndefined() ? fallback : wire}};
+        realtimeDraft_.insert(path, entry);
+        return entry;
+    };
+    const auto optional = [this, initial](QVBoxLayout *layout, const QString &title, const QString &path,
+                                          QWidget *editor, QJsonValue fallback) {
+        const auto entry = initial(path, fallback);
+        auto *toggle = preference(layout, title, QStringLiteral("关闭此项则不发送，使用服务端设置。"),
+                                  entry.value("enabled").toBool());
+        toggle->setObjectName(path + "/send");
+        editor->setEnabled(toggle->isChecked());
+        layout->addWidget(editor);
+        connect(toggle, &QCheckBox::toggled, this, [this, path, editor](bool enabled) {
+            editor->setEnabled(enabled);
+            auto entry = realtimeDraft_.value(path).toObject();
+            entry.insert("enabled", enabled);
+            realtimeDraft_.insert(path, entry);
+            rebuildRealtimeOptions();
+        });
+    };
+    const auto setValue = [this](const QString &path, QJsonValue value) {
+        auto entry = realtimeDraft_.value(path).toObject();
+        entry.insert("value", value);
+        realtimeDraft_.insert(path, entry);
+        rebuildRealtimeOptions();
+    };
+    const auto numeric = [this, initial, optional, setValue](QVBoxLayout *layout, const QString &title,
+                                                             const QString &path, int minimum, int maximum,
+                                                             int fallback, int scale, const QString &unit) {
+        auto *row = new QWidget;
+        auto *vertical = new QVBoxLayout(row);
+        vertical->setContentsMargins(0, 0, 0, 0);
+        vertical->setSpacing(0);
+        auto *horizontal = new QHBoxLayout;
+        horizontal->setContentsMargins(0, 0, 0, 0);
+        vertical->addLayout(horizontal);
+        auto *slider = new QSlider(Qt::Horizontal, row);
+        slider->setObjectName(path);
+        slider->setAccessibleName(title);
+        slider->setRange(minimum, maximum);
+        slider->setSingleStep(1);
+        slider->setValue(qRound(initial(path, double(fallback) / scale).value("value").toDouble() * scale));
+        slider->setMinimumHeight(32);
+        auto *value = label({}, row);
+        value->setMinimumWidth(72);
+        const auto update = [slider, value, scale, unit] {
+            value->setText(QString::number(double(slider->value()) / scale, 'f', scale == 100 ? 2 : 0) + unit);
+        };
+        update();
+        slider->setToolTip(QStringLiteral("范围 %1–%2%3；方向键微调，Home/End 选择端点")
+                               .arg(double(minimum) / scale)
+                               .arg(double(maximum) / scale)
+                               .arg(unit));
+        horizontal->addWidget(slider, 1);
+        horizontal->addWidget(value);
+        vertical->addWidget(
+            label(QStringLiteral("范围 %1–%2%3").arg(double(minimum) / scale).arg(double(maximum) / scale).arg(unit),
+                  row, true));
+        slider->installEventFilter(this);
+        optional(layout, title, path, row, double(fallback) / scale);
+        connect(slider, &QSlider::valueChanged, this, [setValue, path, scale, update](int value) {
+            update();
+            setValue(path, double(value) / scale);
+        });
+    };
+    const auto mode = [this](QVBoxLayout *layout, const QString &title, const QString &key, const QStringList &labels,
+                             const QStringList &values, const QString &fallback) {
+        const QString selected = realtimeDraft_.value(key).toString(fallback);
+        realtimeDraft_.insert(key, selected);
+        auto *combo = new IconComboBox;
+        combo->setObjectName(key);
+        for (int i = 0; i < values.size(); ++i)
+            combo->addItem(labels[i], values[i]);
+        combo->setCurrentIndex(qMax(0, values.indexOf(selected)));
+        layout->addWidget(field(title, combo, this));
+        connect(combo, &QComboBox::currentIndexChanged, this, [this, combo, key] {
+            realtimeDraft_.insert(key, combo->currentData().toString());
+            rebuildRealtimeOptions();
+        });
+        return combo;
+    };
+    auto *vad = group(QStringLiteral("语音活动检测"));
+    const auto wireVad = settings.engine.realtimeOptions.value("turn_detection");
+    auto *vadMode = mode(vad, QStringLiteral("断句方式"), "__vad",
+                         {"不发送 · 服务端设置", "音量断句", "语义断句", "关闭 · 手动提交"},
+                         {"omit", "server_vad", "semantic_vad", "off"},
+                         wireVad.isNull() ? "off" : wireVad.toObject().value("type").toString("omit"));
+    auto *server = new QWidget;
+    auto *serverLayout = new QVBoxLayout(server);
+    serverLayout->setContentsMargins(0, 0, 0, 0);
+    vad->addWidget(server);
+    numeric(serverLayout, QStringLiteral("触发阈值"), "turn_detection/threshold", 0, 100, 50, 100, "");
+    numeric(serverLayout, QStringLiteral("句首前置音频"), "turn_detection/prefix_padding_ms", 0, 5000, 300, 1, " ms");
+    numeric(serverLayout, QStringLiteral("结束静音时长"), "turn_detection/silence_duration_ms", 100, 10000, 500, 1,
+            " ms");
+    auto *semantic = new QWidget;
+    auto *semanticLayout = new QVBoxLayout(semantic);
+    semanticLayout->setContentsMargins(0, 0, 0, 0);
+    vad->addWidget(semantic);
+    const auto segmented = [this, initial, optional, setValue](QVBoxLayout *layout, const QString &title,
+                                                               const QString &path, const QStringList &labels,
+                                                               const QStringList &values, const QString &fallback) {
+        auto *row = new QWidget;
+        auto *horizontal = new QHBoxLayout(row);
+        horizontal->setContentsMargins(0, 0, 0, 0);
+        horizontal->setSpacing(2);
+        auto *buttons = new QButtonGroup(row);
+        buttons->setExclusive(true);
+        const QString selected = initial(path, fallback).value("value").toString();
+        for (int i = 0; i < values.size(); ++i) {
+            auto *button = new QPushButton(labels[i], row);
+            button->setCheckable(true);
+            button->setMinimumHeight(32);
+            button->setObjectName(path + "/" + values[i]);
+            button->setChecked(values[i] == selected);
+            button->setAccessibleName(title + " · " + labels[i]);
+            buttons->addButton(button);
+            horizontal->addWidget(button, 1);
+            connect(button, &QPushButton::clicked, this,
+                    [setValue, path, value = values[i]] { setValue(path, value); });
+        }
+        optional(layout, title, path, row, fallback);
+    };
+    segmented(semanticLayout, QStringLiteral("语义断句积极程度"), "turn_detection/eagerness",
+              {"自动", "低", "中", "高"}, {"auto", "low", "medium", "high"}, "auto");
+    const auto showVad = [vadMode, server, semantic] {
+        server->setVisible(vadMode->currentData() == "server_vad");
+        semantic->setVisible(vadMode->currentData() == "semantic_vad");
+    };
+    showVad();
+    connect(vadMode, &QComboBox::currentIndexChanged, this, showVad);
+    auto *recognition = group(QStringLiteral("识别选项"));
+    auto *languageMode =
+        mode(recognition, QStringLiteral("语言发送方式"), "__language", {"不发送", "单语言", "多语言 · 逗号分隔"},
+             {"omit", "single", "multiple"}, settings.engine.languageMode);
+    controls_.language->setEnabled(languageMode->currentData() != "omit");
+    connect(languageMode, &QComboBox::currentIndexChanged, this,
+            [this, languageMode] { controls_.language->setEnabled(languageMode->currentData() != "omit"); });
+    for (const auto &path : {QString("transcription/prompt"), QString("transcription/keywords")}) {
+        auto *text = new QPlainTextEdit;
+        text->setObjectName(path);
+        text->setFixedHeight(76);
+        const auto entry = initial(path, path.endsWith("keywords") ? QJsonValue(QJsonArray{}) : QJsonValue(""));
+        if (path.endsWith("keywords")) {
+            QStringList words;
+            for (auto word : entry.value("value").toArray())
+                words.append(word.toString());
+            text->setPlainText(words.join('\n'));
+        } else
+            text->setPlainText(entry.value("value").toString());
+        const QString title =
+            path.endsWith("keywords") ? QStringLiteral("关键词 · 每行一个") : QStringLiteral("识别提示");
+        text->setAccessibleName(title);
+        optional(recognition, title, path, text, "");
+        connect(text, &QPlainTextEdit::textChanged, this, [text, path, setValue] {
+            if (path.endsWith("keywords")) {
+                QJsonArray words;
+                for (const auto &word : text->toPlainText().split('\n', Qt::SkipEmptyParts))
+                    words.append(word.trimmed());
+                setValue(path, words);
+            } else
+                setValue(path, text->toPlainText());
+        });
+    }
+    segmented(recognition, QStringLiteral("出字延迟"), "transcription/delay", {"极低", "低", "中", "高", "极高"},
+              {"minimal", "low", "medium", "high", "xhigh"}, "medium");
+    auto *probability =
+        preference(recognition, QStringLiteral("请求识别对数概率"), QStringLiteral("诊断输出；是否支持由服务端决定。"),
+                   initial("logprobs", true).value("enabled").toBool());
+    probability->setObjectName("logprobs/send");
+    connect(probability, &QCheckBox::toggled, this, [this](bool enabled) {
+        realtimeDraft_.insert("logprobs", QJsonObject{{"enabled", enabled}, {"value", true}});
+        rebuildRealtimeOptions();
+    });
+    auto *noise = group(QStringLiteral("输入降噪"));
+    const auto wireNoise = settings.engine.realtimeOptions.value("noise_reduction");
+    auto *noiseMode = mode(noise, QStringLiteral("降噪方式"), "__noise",
+                           {"不发送 · 服务端设置", "关闭", "近场 · 耳麦", "远场 · 会议麦克风"},
+                           {"omit", "off", "near_field", "far_field"},
+                           wireNoise.isNull() ? "off" : wireNoise.toObject().value("type").toString("omit"));
+    auto *strength = new QWidget;
+    auto *strengthLayout = new QVBoxLayout(strength);
+    strengthLayout->setContentsMargins(0, 0, 0, 0);
+    noise->addWidget(strength);
+    numeric(strengthLayout, QStringLiteral("降噪强度"), "noise_reduction/strength", 0, 100, 100, 100, "");
+    const auto showNoise = [noiseMode, strength] {
+        strength->setVisible(noiseMode->currentData() == "near_field" || noiseMode->currentData() == "far_field");
+    };
+    showNoise();
+    connect(noiseMode, &QComboBox::currentIndexChanged, this, showNoise);
+    auto *inspect = new QPushButton(QStringLiteral("查看请求与服务端有效配置"));
+    engine->addWidget(inspect);
+    connect(inspect, &QPushButton::clicked, this, [this] {
+        auto *dialog = new QDialog(this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->setWindowTitle(QStringLiteral("会话配置 · 最近一次连接"));
+        dialog->resize(600, 420);
+        auto *layout = new QVBoxLayout(dialog);
+        auto *text = new QPlainTextEdit(dialog);
+        text->setReadOnly(true);
+        text->setPlainText(QStringLiteral("请求配置\n%1\n服务端有效配置\n%2")
+                               .arg(QString::fromUtf8(QJsonDocument(requested_).toJson()),
+                                    QString::fromUtf8(QJsonDocument(effective_).toJson())));
+        layout->addWidget(text);
+        dialog->show();
+    });
+
     auto *correction = page(tabs_, QStringLiteral("文本纠错"));
     controls_.enableCorrection =
         preference(correction, QStringLiteral("启用文本纠错"), QStringLiteral("完成转写后，按轮次优化文字。"),
@@ -243,19 +482,21 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     auto *durationLayout = new QHBoxLayout(duration);
     durationLayout->setContentsMargins(0, 0, 0, 0);
     durationLayout->setSpacing(8);
-    controls_.sliceSeconds = new QSpinBox(duration);
+    controls_.sliceSeconds = new QSlider(Qt::Horizontal, duration);
     controls_.sliceSeconds->setObjectName("cacheSliceSeconds");
-    controls_.sliceSeconds->setButtonSymbols(QAbstractSpinBox::NoButtons);
     controls_.sliceSeconds->setRange(1, 3600);
+    controls_.sliceSeconds->installEventFilter(this);
     controls_.sliceSeconds->setValue(settings.cache.rawSliceSeconds);
-    controls_.sliceSeconds->setFixedSize(80, 32);
-    controls_.sliceSeconds->setFont(uiFont(12));
+    controls_.sliceSeconds->setMinimumWidth(100);
+    controls_.sliceSeconds->setMinimumHeight(32);
     duration->setFocusProxy(controls_.sliceSeconds);
-    durationLayout->addWidget(controls_.sliceSeconds);
-    durationLayout->addWidget(label(QStringLiteral("秒"), duration));
-    durationLayout->addWidget(label(QStringLiteral("1–3600 秒"), duration, true));
-    durationLayout->addStretch();
-    cache->addWidget(inlineField(QStringLiteral("原始录音切片时长"), duration, shell));
+    durationLayout->addWidget(controls_.sliceSeconds, 1);
+    auto *seconds = label(QString::number(settings.cache.rawSliceSeconds) + QStringLiteral(" 秒"), duration);
+    seconds->setMinimumWidth(62);
+    durationLayout->addWidget(seconds);
+    connect(controls_.sliceSeconds, &QSlider::valueChanged, this,
+            [seconds](int value) { seconds->setText(QString::number(value) + QStringLiteral(" 秒")); });
+    cache->addWidget(field(QStringLiteral("原始录音切片时长 · 1–3600 秒"), duration, shell));
     controls_.sliceSeconds->setAccessibleName(QStringLiteral("原始录音切片时长，秒"));
     auto *retention = label(QStringLiteral("缓存按会话分别保存，历史录音不会自动清理。"), shell, true);
     retention->setFont(uiFont(11));
@@ -265,12 +506,12 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     appearance->addWidget(label(QStringLiteral("界面主题"), shell));
     auto *choices = new QHBoxLayout;
     choices->setSpacing(16);
-    auto *group = new QButtonGroup(this);
-    group->setExclusive(true);
+    auto *themeGroup = new QButtonGroup(this);
+    themeGroup->setExclusive(true);
     for (const bool dark : {false, true}) {
         auto *choice = new ThemeChoice(dark, shell);
         choices->addWidget(choice, 1);
-        group->addButton(choice);
+        themeGroup->addButton(choice);
         connect(choice, &QPushButton::clicked, this, [this, dark] { emit themeSelected(dark ? "abyssus" : "vallum"); });
     }
     appearance->addLayout(choices);
@@ -308,6 +549,50 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     controls_.modelsError->installEventFilter(this);
     applyTheme(settings.theme);
     fitToContents();
+}
+
+void SettingsWindow::rebuildRealtimeOptions()
+{
+    QJsonObject options, transcription, detection, noise;
+    const QString vad = realtimeDraft_.value("__vad").toString("omit");
+    const QString reduction = realtimeDraft_.value("__noise").toString("omit");
+    for (auto it = realtimeDraft_.begin(); it != realtimeDraft_.end(); ++it) {
+        const auto entry = it.value().toObject();
+        if (!entry.value("enabled").toBool())
+            continue;
+        const auto parts = it.key().split('/');
+        const auto value = entry.value("value");
+        if (parts.size() == 2) {
+            if (parts[0] == "transcription")
+                transcription.insert(parts[1], value);
+            if (parts[0] == "turn_detection" && ((vad == "semantic_vad" && parts[1] == "eagerness") ||
+                                                 (vad == "server_vad" && parts[1] != "eagerness")))
+                detection.insert(parts[1], value);
+            if (parts[0] == "noise_reduction")
+                noise.insert(parts[1], value);
+        } else if (it.key() == "logprobs")
+            options.insert("logprobs", value);
+    }
+    if (!transcription.isEmpty())
+        options.insert("transcription", transcription);
+    if (vad == "off")
+        options.insert("turn_detection", QJsonValue::Null);
+    else if (vad != "omit") {
+        detection.insert("type", vad);
+        options.insert("turn_detection", detection);
+    }
+    if (reduction == "off")
+        options.insert("noise_reduction", QJsonValue::Null);
+    else if (reduction != "omit") {
+        noise.insert("type", reduction);
+        options.insert("noise_reduction", noise);
+    }
+    emit realtimeChanged(options, realtimeDraft_, realtimeDraft_.value("__language").toString("single"));
+}
+void SettingsWindow::setSessionConfiguration(const QJsonObject &requested, const QJsonObject &effective)
+{
+    requested_ = requested;
+    effective_ = effective;
 }
 
 void SettingsWindow::scheduleFit()
@@ -384,6 +669,11 @@ void SettingsWindow::applyTheme(const QString &name)
 
 bool SettingsWindow::eventFilter(QObject *object, QEvent *event)
 {
+    if (event->type() == QEvent::Wheel && qobject_cast<QSlider *>(object) &&
+        !static_cast<QWidget *>(object)->hasFocus()) {
+        event->ignore();
+        return true;
+    }
     if (event->type() == QEvent::LayoutRequest ||
         (object == controls_.modelsError && (event->type() == QEvent::Show || event->type() == QEvent::Hide)))
         scheduleFit();

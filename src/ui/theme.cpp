@@ -143,11 +143,22 @@ QString themeStyleSheet(bool dark)
         }
         QPushButton:hover { background: @hover; }
         QPushButton:focus { border: 1.5px solid @focus; }
-        QLineEdit, QComboBox, QSpinBox {
+        QSlider::groove:horizontal { height: 4px; background: @border; border-radius: 2px; }
+        QSlider::sub-page:horizontal { background: @strongAccent; border-radius: 2px; }
+        QSlider::handle:horizontal { width: 12px; margin: -5px 0; background: @surface;
+            border: 1px solid @strongAccent; border-radius: 6px; }
+        QSlider::handle:horizontal:focus { border: 2px solid @focus; }
+        QSlider::handle:horizontal:disabled { background: @subtle; border-color: @border; }
+        QSlider::sub-page:horizontal:disabled { background: @border; }
+        QPushButton:checked { background: @hover; border-color: @strongAccent; }
+        QPlainTextEdit { background: @surface; border: 1px solid @border; border-radius: 4px; padding: 4px; }
+        QPlainTextEdit:focus { border: 1.5px solid @focus; }
+        QPlainTextEdit:disabled { color: @secondary; background: @subtle; }
+        QLineEdit, QComboBox {
             background: @surface; border: 1px solid @border; border-radius: 4px; padding: 0 10px;
         }
-        QLineEdit:focus, QComboBox:focus, QSpinBox:focus { border: 1.5px solid @focus; }
-        QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled { background: @subtle; color: @secondary; }
+        QLineEdit:focus, QComboBox:focus { border: 1.5px solid @focus; }
+        QLineEdit:disabled, QComboBox:disabled { background: @subtle; color: @secondary; }
         QComboBox { padding-right: 28px; }
         QComboBox QLineEdit { background: transparent; border: 0; padding: 0; }
         QComboBox::drop-down { border: 0; width: 28px; }

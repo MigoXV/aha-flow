@@ -23,7 +23,7 @@
 #include <QScreen>
 #include <QLayout>
 #include <QSignalSpy>
-#include <QSpinBox>
+#include <QSlider>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTabWidget>
@@ -50,6 +50,64 @@ class UiTest final : public QObject
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory_.path());
         QApplication::setFont(aha::uiFont());
+    }
+    void realtimeSlidersAndOmission()
+    {
+        for (const auto &theme : {"vallum", "abyssus"}) {
+            aha::AppSettings settings;
+            settings.theme = theme;
+            aha::SettingsWindow dialog(settings, nullptr);
+            dialog.show();
+            auto *mode = dialog.findChild<QComboBox *>("__vad");
+            QVERIFY(mode);
+            QSignalSpy changed(&dialog, &aha::SettingsWindow::realtimeChanged);
+            mode->setCurrentIndex(mode->findData("server_vad"));
+            auto *slider = dialog.findChild<QSlider *>("turn_detection/threshold");
+            QVERIFY(slider);
+            auto *toggle = dialog.findChild<QCheckBox *>("turn_detection/threshold/send");
+            QVERIFY(toggle);
+            QVERIFY(!slider->isEnabled());
+            toggle->setChecked(true);
+            slider->setValue(70);
+            auto options = changed.last()[0].toJsonObject();
+            QCOMPARE(options.value("turn_detection").toObject().value("threshold").toDouble(), 0.7);
+            QTest::keyClick(slider, Qt::Key_Home);
+            QCOMPARE(slider->value(), 0);
+            QVERIFY(changed.last()[0].toJsonObject().value("turn_detection").toObject().contains("threshold"));
+            QCOMPARE(changed.last()[0].toJsonObject().value("turn_detection").toObject().value("threshold").toDouble(),
+                     0.0);
+            QTest::keyClick(slider, Qt::Key_End);
+            QCOMPARE(slider->value(), 100);
+            QTest::keyClick(slider, Qt::Key_Left);
+            QCOMPARE(slider->value(), 99);
+            toggle->setChecked(false);
+            options = changed.last()[0].toJsonObject();
+            QVERIFY(!options.value("turn_detection").toObject().contains("threshold"));
+            QCOMPARE(slider->value(), 99);
+            settings.engine.realtimeOptions = options;
+            settings.engine.realtimeDraft = changed.last()[1].toJsonObject();
+            aha::SettingsWindow restored(settings, nullptr);
+            QCOMPARE(restored.findChild<QSlider *>("turn_detection/threshold")->value(), 99);
+            QVERIFY(!restored.findChild<QSlider *>("turn_detection/threshold")->isEnabled());
+            mode->setCurrentIndex(mode->findData("off"));
+            QVERIFY(changed.last()[0].toJsonObject().value("turn_detection").isNull());
+            mode->setCurrentIndex(mode->findData("omit"));
+            QVERIFY(!changed.last()[0].toJsonObject().contains("turn_detection"));
+            verifySettingsGeometry(&dialog);
+            const QString captures = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+            if (!captures.isEmpty()) {
+                QDir().mkpath(captures);
+                mode->setCurrentIndex(mode->findData("server_vad"));
+                for (auto *button : dialog.findChildren<QToolButton *>())
+                    if (button->text() == QStringLiteral("语音活动检测"))
+                        button->setChecked(true);
+                auto *scroll = qobject_cast<QScrollArea *>(dialog.findChild<QTabWidget *>("settingsTabs")->widget(0));
+                QCoreApplication::processEvents();
+                scroll->ensureWidgetVisible(slider);
+                QCoreApplication::processEvents();
+                dialog.grab().save(QDir(captures).filePath(QString("realtime-%1.png").arg(theme)));
+            }
+        }
     }
     void fontsSurviveStylingAndDpi()
     {
@@ -186,7 +244,7 @@ class UiTest final : public QObject
         window.findChild<QTabWidget *>("settingsTabs")->setCurrentIndex(2);
         window.findChild<QCheckBox *>("cacheEnabled")->setChecked(false);
         window.findChild<QLineEdit *>("cacheDirectory")->setText(settingsDirectory_.filePath("recordings"));
-        window.findChild<QSpinBox *>("cacheSliceSeconds")->setValue(42);
+        window.findChild<QSlider *>("cacheSliceSeconds")->setValue(42);
         QSettings store;
         const auto loaded = aha::AppSettings::load(store);
         QVERIFY(!loaded.cache.enabled);
