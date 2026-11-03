@@ -21,20 +21,21 @@ IconComboBox::IconComboBox(QWidget *parent) : QComboBox(parent)
     list->setTextElideMode(Qt::ElideRight);
     setView(list);
 }
-void IconComboBox::replaceItems(const QStringList &items, const QString &selected)
+void IconComboBox::replaceItems(const QStringList &items, const QString &selected, bool preserveSelected)
 {
     if (popupOpen_) {
         pendingItems_ = items;
+        preservePendingSelection_ = preserveSelected;
         pendingUpdate_ = true;
         return;
     }
     pendingUpdate_ = false;
     const QSignalBlocker blocker(this);
     clear();
-    if (!selected.isEmpty() && !items.contains(selected))
+    if (preserveSelected && !selected.isEmpty() && !items.contains(selected))
         addItem(selected);
     addItems(items);
-    setCurrentText(selected);
+    setCurrentText(items.contains(selected) || preserveSelected ? selected : items.value(0));
 }
 void IconComboBox::showPopup()
 {
@@ -49,7 +50,10 @@ void IconComboBox::hidePopup()
     QTimer::singleShot(0, this, [this] {
         if (!popupOpen_ && pendingUpdate_) {
             pendingUpdate_ = false;
-            replaceItems(pendingItems_, currentText());
+            const auto before = currentText();
+            replaceItems(pendingItems_, before, preservePendingSelection_);
+            if (currentText() != before)
+                emit currentTextChanged(currentText());
         }
     });
 }

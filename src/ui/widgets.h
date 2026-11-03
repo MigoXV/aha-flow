@@ -15,7 +15,7 @@ class IconComboBox final : public QComboBox
 {
   public:
     explicit IconComboBox(QWidget *parent = nullptr);
-    void replaceItems(const QStringList &items, const QString &selected);
+    void replaceItems(const QStringList &items, const QString &selected, bool preserveSelected = true);
     void showPopup() override;
     void hidePopup() override;
 
@@ -24,6 +24,7 @@ class IconComboBox final : public QComboBox
 
   private:
     QStringList pendingItems_;
+    bool preservePendingSelection_ = true;
     bool pendingUpdate_ = false;
     bool popupOpen_ = false;
 };

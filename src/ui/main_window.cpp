@@ -375,7 +375,16 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     });
     connect(close, &QToolButton::clicked, this, &QWidget::close);
     connect(&engine_, &EngineClient::modelsReady, this, [this](const QStringList &models) {
-        static_cast<IconComboBox *>(models_)->replaceItems(models, settings_.engine.model);
+        EngineConfig effective = settings_.engine;
+        if (!runtimeEngine_.isEmpty())
+            effective.baseUrl = runtimeEngine_;
+        QString selected = settings_.engine.model;
+        if (effective.isOfficialOpenAi() && !models.contains(selected)) {
+            selected = models.value(0);
+            settings_.engine.model = selected;
+            saveSettings();
+        }
+        static_cast<IconComboBox *>(models_)->replaceItems(models, selected, !effective.isOfficialOpenAi());
         modelsError_->setText(models.isEmpty() ? QStringLiteral("服务端没有可用模型") : QString());
         modelsError_->setVisible(models.isEmpty());
     });

@@ -74,7 +74,7 @@ void EngineClient::fetchModels(const EngineConfig &config)
             reply->abort();
         }
     });
-    connect(reply, &QNetworkReply::finished, this, [this, reply, deadline] {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, deadline, config] {
         deadline->stop();
         reply->deleteLater();
         if (activeReply_ != reply) {
@@ -113,7 +113,7 @@ void EngineClient::fetchModels(const EngineConfig &config)
                 models.append(id);
             }
         }
-        emit modelsReady(models);
+        emit modelsReady(config.transcriptionModels(models));
     });
 }
 

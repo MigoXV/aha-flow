@@ -2,6 +2,7 @@
 
 #include <QString>
 #include <QJsonObject>
+#include <QStringList>
 #include <QUrl>
 
 namespace aha
@@ -19,6 +20,8 @@ struct EngineConfig {
     QJsonObject realtimeDraft;
     QString languageMode = QStringLiteral("single");
 
+    bool isOfficialOpenAi() const;
+    QStringList transcriptionModels(const QStringList &models) const;
     QUrl modelsUrl() const;
     QUrl realtimeUrl() const;
 
