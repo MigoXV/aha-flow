@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QString>
+#include <QJsonObject>
+#include <QStringList>
 #include <QUrl>
 
 namespace aha
@@ -13,7 +15,13 @@ struct EngineConfig {
     bool allowUntrustedCertificate = true;
     bool enableAha = true;
     QString language;
+    // Wire options and retained editor values are separate: omitted is not null.
+    QJsonObject realtimeOptions;
+    QJsonObject realtimeDraft;
+    QString languageMode = QStringLiteral("single");
 
+    bool isOfficialOpenAi() const;
+    QStringList transcriptionModels(const QStringList &models) const;
     QUrl modelsUrl() const;
     QUrl realtimeUrl() const;
 

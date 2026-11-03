@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/engine_config.h"
 #include <QHash>
 #include <QJsonObject>
 #include <QMetaType>
@@ -41,6 +42,6 @@ class TranscriptionState
     QSet<QString> completed_;
     QQueue<QString> completedOrder_;
 };
-QJsonObject sessionUpdate(const QString &model, const QString &language);
+QJsonObject sessionUpdate(const EngineConfig &config);
 } // namespace aha
 Q_DECLARE_METATYPE(aha::Transcript)

@@ -13,10 +13,11 @@ class SessionController final : public QObject
 {
     Q_OBJECT
   public:
-    explicit SessionController(QObject *parent = nullptr);
+    explicit SessionController(QObject *parent = nullptr, int stopTimeoutMs = 30000);
     ~SessionController() override;
     void start(const AppSettings &settings, const QString &replayPcm = {});
     void stop();
+    void commitTurn();
     void shutdown();
     void acknowledgeTranscript(const QString &itemId);
     bool active() const
@@ -29,6 +30,7 @@ class SessionController final : public QObject
     void levelChanged(float level);
     void connected(const QString &address);
     void started();
+    void configurationChanged(const QJsonObject &requested, const QJsonObject &effective);
     void finished();
     void shutdownReady();
     void cacheDirectory(const QString &path);
@@ -36,6 +38,7 @@ class SessionController final : public QObject
   private:
     void launch();
     void settle();
+    int stopTimeoutMs_;
     QThread networkThread_, storageThread_;
     QPointer<SessionWorker> worker_;
     QPointer<AudioCache> cache_;

@@ -47,3 +47,8 @@ if(TARGET aha-flow-launcher)
     add_test(NAME portable_launcher COMMAND aha_launcher_tests)
     set_tests_properties(portable_launcher PROPERTIES TIMEOUT 20)
 endif()
+
+qt_add_executable(aha_realtime_tests realtime_test.cpp)
+target_link_libraries(aha_realtime_tests PRIVATE aha_network Qt6::Test aha_options)
+add_test(NAME realtime_configuration COMMAND aha_realtime_tests)
+set_tests_properties(realtime_configuration PROPERTIES TIMEOUT 30)

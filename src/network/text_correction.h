@@ -32,6 +32,10 @@ class TextCorrection final : public QObject
     TextCorrection(CorrectionConfig config, bool allowSelfSigned, QObject *parent = nullptr, int timeoutMs = 60000);
     void enqueue(const Transcript &result);
     void cancel();
+    bool busy() const
+    {
+        return !reply_.isNull() || !queue_.isEmpty();
+    }
   signals:
     void changed(const aha::Transcript &result);
 

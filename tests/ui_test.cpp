@@ -1,6 +1,9 @@
 #include "ui/main_window.h"
 #include "ui/settings_window.h"
 #include "ui/theme.h"
+#include "ui/widgets.h"
+#include <QAbstractItemView>
+#include <QStyleOptionSlider>
 #include <QCheckBox>
 #include <QAbstractTextDocumentLayout>
 #include <QDialog>
@@ -23,7 +26,7 @@
 #include <QScreen>
 #include <QLayout>
 #include <QSignalSpy>
-#include <QSpinBox>
+#include <QSlider>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTabWidget>
@@ -46,10 +49,171 @@ class UiTest final : public QObject
     {
         QCoreApplication::setOrganizationName("aha-flow-tests");
         QCoreApplication::setApplicationName("ui-tests");
-        QCoreApplication::setApplicationVersion("0.2.0");
+        QCoreApplication::setApplicationVersion("0.3.0");
         QSettings::setDefaultFormat(QSettings::IniFormat);
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory_.path());
         QApplication::setFont(aha::uiFont());
+    }
+    void modelPopupStaysBoundedDuringRefresh()
+    {
+        for (const auto &theme : {"vallum", "abyssus"}) {
+            aha::AppSettings settings;
+            settings.theme = theme;
+            aha::SettingsWindow dialog(settings, nullptr);
+            dialog.show();
+            auto *combo = qobject_cast<QComboBox *>(dialog.findChild<QComboBox *>("model"));
+            auto *models = static_cast<aha::IconComboBox *>(combo);
+            QStringList items;
+            for (int i = 0; i < 200; ++i)
+                items.append(QString("model-%1").arg(i));
+            models->replaceItems(items, "model-0");
+            QTest::mouseClick(models, Qt::LeftButton);
+            QCoreApplication::processEvents();
+            QVERIFY(models->view()->isVisible());
+            QVERIFY(models->view()->height() <= models->view()->sizeHintForRow(0) * 8 + 4);
+            QVERIFY(models->view()->verticalScrollBar()->maximum() > 0);
+            auto refreshed = items;
+            refreshed.append("new-model");
+            models->replaceItems(refreshed, "model-0");
+            dialog.fitToContents();
+            QTest::qWait(30);
+            QVERIFY(models->view()->isVisible());
+            QCOMPARE(models->count(), 200);
+            models->setCurrentIndex(7);
+            models->hidePopup();
+            QCoreApplication::processEvents();
+            QCOMPARE(models->count(), 201);
+            QCOMPARE(models->currentText(), QString("model-7"));
+            models->showPopup();
+            QCoreApplication::processEvents();
+            QTest::keyClick(models->view(), Qt::Key_Down);
+            QTest::keyClick(models->view(), Qt::Key_Return);
+            QTRY_VERIFY(!models->view()->isVisible());
+            QCOMPARE(models->currentText(), QString("model-8"));
+            models->showPopup();
+            models->replaceItems({"whisper-1", "gpt-live-transcribe"}, "whisper-1", false);
+            models->hidePopup();
+            QCoreApplication::processEvents();
+            QCOMPARE(models->count(), 2);
+            QCOMPARE(models->currentText(), QString("whisper-1"));
+        }
+    }
+    void steppedSlidersPreserveProtocolValues()
+    {
+        for (const auto &theme : {"vallum", "abyssus"}) {
+            aha::AppSettings settings;
+            settings.theme = theme;
+            aha::SettingsWindow dialog(settings, nullptr);
+            QSignalSpy changed(&dialog, &aha::SettingsWindow::realtimeChanged);
+            auto *vad = dialog.findChild<QComboBox *>("__vad");
+            vad->setCurrentIndex(vad->findData("semantic_vad"));
+            for (const auto &path : {QString("turn_detection/eagerness"), QString("transcription/delay")}) {
+                auto *slider = dialog.findChild<QSlider *>(path);
+                QVERIFY(slider);
+                auto *toggle = dialog.findChild<QCheckBox *>(path + "/send");
+                QVERIFY(toggle);
+                toggle->setChecked(true);
+                const auto values = path.endsWith("eagerness")
+                                        ? QStringList{"low", "medium", "high", "auto"}
+                                        : QStringList{"minimal", "low", "medium", "high", "xhigh"};
+                const auto parts = path.split('/');
+                for (int i = 0; i < values.size(); ++i) {
+                    slider->setValue(i);
+                    QCOMPARE(changed.last()[0].toJsonObject().value(parts[0]).toObject().value(parts[1]).toString(),
+                             values[i]);
+                }
+                toggle->setChecked(false);
+                QVERIFY(!changed.last()[0].toJsonObject().value(parts[0]).toObject().contains(parts[1]));
+                settings.engine.realtimeDraft = changed.last()[1].toJsonObject();
+                settings.engine.realtimeOptions = changed.last()[0].toJsonObject();
+            }
+            aha::SettingsWindow restored(settings, nullptr);
+            QCOMPARE(restored.findChild<QSlider *>("transcription/delay")->value(), 4);
+            QVERIFY(!restored.findChild<QSlider *>("transcription/delay")->isEnabled());
+            dialog.show();
+            auto *slider = dialog.findChild<QSlider *>("transcription/delay");
+            QStyleOptionSlider option;
+            option.initFrom(slider);
+            option.orientation = Qt::Horizontal;
+            option.minimum = slider->minimum();
+            option.maximum = slider->maximum();
+            option.sliderPosition = slider->value();
+            const auto handle =
+                slider->style()->subControlRect(QStyle::CC_Slider, &option, QStyle::SC_SliderHandle, slider);
+            QCOMPARE(handle.width(), handle.height());
+            const auto captures = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+            if (!captures.isEmpty()) {
+                QDir().mkpath(captures);
+                for (auto *button : dialog.findChildren<QToolButton *>())
+                    if (button->text() == QStringLiteral("语音活动检测"))
+                        button->setChecked(true);
+                auto *eagerness = dialog.findChild<QSlider *>("turn_detection/eagerness");
+                dialog.findChild<QCheckBox *>("turn_detection/eagerness/send")->setChecked(true);
+                auto *scroll = qobject_cast<QScrollArea *>(dialog.findChild<QTabWidget *>("settingsTabs")->widget(0));
+                QCoreApplication::processEvents();
+                scroll->ensureWidgetVisible(eagerness);
+                QCoreApplication::processEvents();
+                dialog.grab().save(QDir(captures).filePath(QString("stepped-%1.png").arg(theme)));
+            }
+        }
+    }
+    void realtimeSlidersAndOmission()
+    {
+        for (const auto &theme : {"vallum", "abyssus"}) {
+            aha::AppSettings settings;
+            settings.theme = theme;
+            aha::SettingsWindow dialog(settings, nullptr);
+            dialog.show();
+            auto *mode = dialog.findChild<QComboBox *>("__vad");
+            QVERIFY(mode);
+            QSignalSpy changed(&dialog, &aha::SettingsWindow::realtimeChanged);
+            mode->setCurrentIndex(mode->findData("server_vad"));
+            auto *slider = dialog.findChild<QSlider *>("turn_detection/threshold");
+            QVERIFY(slider);
+            auto *toggle = dialog.findChild<QCheckBox *>("turn_detection/threshold/send");
+            QVERIFY(toggle);
+            QVERIFY(!slider->isEnabled());
+            toggle->setChecked(true);
+            slider->setValue(70);
+            auto options = changed.last()[0].toJsonObject();
+            QCOMPARE(options.value("turn_detection").toObject().value("threshold").toDouble(), 0.7);
+            QTest::keyClick(slider, Qt::Key_Home);
+            QCOMPARE(slider->value(), 0);
+            QVERIFY(changed.last()[0].toJsonObject().value("turn_detection").toObject().contains("threshold"));
+            QCOMPARE(changed.last()[0].toJsonObject().value("turn_detection").toObject().value("threshold").toDouble(),
+                     0.0);
+            QTest::keyClick(slider, Qt::Key_End);
+            QCOMPARE(slider->value(), 100);
+            QTest::keyClick(slider, Qt::Key_Left);
+            QCOMPARE(slider->value(), 99);
+            toggle->setChecked(false);
+            options = changed.last()[0].toJsonObject();
+            QVERIFY(!options.value("turn_detection").toObject().contains("threshold"));
+            QCOMPARE(slider->value(), 99);
+            settings.engine.realtimeOptions = options;
+            settings.engine.realtimeDraft = changed.last()[1].toJsonObject();
+            aha::SettingsWindow restored(settings, nullptr);
+            QCOMPARE(restored.findChild<QSlider *>("turn_detection/threshold")->value(), 99);
+            QVERIFY(!restored.findChild<QSlider *>("turn_detection/threshold")->isEnabled());
+            mode->setCurrentIndex(mode->findData("off"));
+            QVERIFY(changed.last()[0].toJsonObject().value("turn_detection").isNull());
+            mode->setCurrentIndex(mode->findData("omit"));
+            QVERIFY(!changed.last()[0].toJsonObject().contains("turn_detection"));
+            verifySettingsGeometry(&dialog);
+            const QString captures = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+            if (!captures.isEmpty()) {
+                QDir().mkpath(captures);
+                mode->setCurrentIndex(mode->findData("server_vad"));
+                for (auto *button : dialog.findChildren<QToolButton *>())
+                    if (button->text() == QStringLiteral("语音活动检测"))
+                        button->setChecked(true);
+                auto *scroll = qobject_cast<QScrollArea *>(dialog.findChild<QTabWidget *>("settingsTabs")->widget(0));
+                QCoreApplication::processEvents();
+                scroll->ensureWidgetVisible(slider);
+                QCoreApplication::processEvents();
+                dialog.grab().save(QDir(captures).filePath(QString("realtime-%1.png").arg(theme)));
+            }
+        }
     }
     void fontsSurviveStylingAndDpi()
     {
@@ -186,7 +350,7 @@ class UiTest final : public QObject
         window.findChild<QTabWidget *>("settingsTabs")->setCurrentIndex(2);
         window.findChild<QCheckBox *>("cacheEnabled")->setChecked(false);
         window.findChild<QLineEdit *>("cacheDirectory")->setText(settingsDirectory_.filePath("recordings"));
-        window.findChild<QSpinBox *>("cacheSliceSeconds")->setValue(42);
+        window.findChild<QSlider *>("cacheSliceSeconds")->setValue(42);
         QSettings store;
         const auto loaded = aha::AppSettings::load(store);
         QVERIFY(!loaded.cache.enabled);

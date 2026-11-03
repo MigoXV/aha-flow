@@ -27,7 +27,10 @@ class BehaviorTest final : public QObject
         QVERIFY(settings.engine.allowUntrustedCertificate);
         settings.cache.rootDirectory = directory.path();
         settings.cache.rawSliceSeconds = 17;
-        settings.engine.language = "zh";
+        settings.engine.language = "zh,en";
+        settings.engine.languageMode = "multiple";
+        settings.engine.realtimeOptions = {{"turn_detection", QJsonValue::Null}};
+        settings.engine.realtimeDraft = {{"turn_detection/threshold", QJsonObject{{"enabled", false}, {"value", 0.7}}}};
         settings.engine.apiKey = "local-test-key";
         settings.correction.enabled = true;
         settings.rememberServer();
@@ -35,6 +38,9 @@ class BehaviorTest final : public QObject
         const auto loaded = aha::AppSettings::load(store);
         QCOMPARE(loaded.cache.rootDirectory, directory.path());
         QCOMPARE(loaded.cache.rawSliceSeconds, 17);
+        QCOMPARE(loaded.engine.languageMode, QString("multiple"));
+        QCOMPARE(loaded.engine.realtimeOptions, settings.engine.realtimeOptions);
+        QCOMPARE(loaded.engine.realtimeDraft, settings.engine.realtimeDraft);
         QCOMPARE(loaded.engine.apiKey, QStringLiteral("local-test-key"));
         QVERIFY(loaded.validate().isEmpty());
         settings.cache.rootDirectory = "relative";
@@ -159,6 +165,30 @@ class BehaviorTest final : public QObject
         QCOMPARE(aha::engineProxy(QUrl("wss://remote.test")).type(), QNetworkProxy::Socks5Proxy);
         qputenv("https_proxy", "https://localhost:3128");
         QVERIFY_EXCEPTION_THROWN(aha::engineProxy(QUrl("https://remote.test")), std::runtime_error);
+    }
+    void partialPacketFlushPreservesResampler()
+    {
+        QAudioFormat format;
+        format.setSampleRate(48000);
+        format.setChannelCount(1);
+        format.setSampleFormat(QAudioFormat::Int16);
+        aha::PcmConverter continuous(format), manualTurns(format);
+        QByteArray input(48000, '\0');
+        for (int i = 0; i < input.size(); i += 2)
+            qToLittleEndian<qint16>(qint16(10000 * std::sin(i * 0.03)), input.data() + i);
+        QByteArray expected, actual;
+        for (int offset = 0; offset < input.size(); offset += 1000) {
+            for (const auto &packet : continuous.feed(input.mid(offset, 1000)))
+                expected += packet;
+            for (const auto &packet : manualTurns.feed(input.mid(offset, 1000)))
+                actual += packet;
+            actual += manualTurns.takePacket();
+        }
+        for (const auto &packet : continuous.feed({}, true))
+            expected += packet;
+        for (const auto &packet : manualTurns.feed({}, true))
+            actual += packet;
+        QCOMPARE(actual, expected);
     }
     void resamplingAndTail()
     {

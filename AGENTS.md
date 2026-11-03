@@ -8,3 +8,5 @@
 - README.md 使用中文。不得提交 API Key、录音或本机配置。
 - 常规验证：`cmake --preset debug`、`cmake --build --preset debug`、`ctest --preset debug`。
 - CI 不依赖局域网引擎或麦克风；真实引擎检查由开发者显式执行。
+
+- 原则上按独立、可审查的逻辑单元分批提交，每批包含对应验证；避免将多个任务或无关修改挤入同一次提交。功能开发使用独立分支，通过 PR 合入主分支。

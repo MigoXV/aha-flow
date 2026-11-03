@@ -8,6 +8,32 @@ class EngineConfigTest final : public QObject
     Q_OBJECT
 
   private slots:
+    void officialTranscriptionModelFilter()
+    {
+        aha::EngineConfig config;
+        const QStringList models{"gpt-4o",
+                                 "gpt-realtime",
+                                 "gpt-4o-mini-tts",
+                                 "text-embedding-3-small",
+                                 "whisper-1",
+                                 "gpt-live-transcribe",
+                                 "gpt-transcribe",
+                                 "gpt-realtime-whisper",
+                                 "gpt-4o-transcribe",
+                                 "gpt-4o-mini-transcribe-2025-12-15",
+                                 "gpt-4o-transcribe-diarize",
+                                 "gpt-4o-transcribe-fake",
+                                 "whisper-1"};
+        QCOMPARE(config.transcriptionModels(models), models);
+        config.baseUrl = "HTTPS://API.OPENAI.COM/v1";
+        QVERIFY(config.isOfficialOpenAi());
+        QCOMPARE(config.transcriptionModels(models),
+                 QStringList({"whisper-1", "gpt-live-transcribe", "gpt-transcribe", "gpt-realtime-whisper",
+                              "gpt-4o-transcribe", "gpt-4o-mini-transcribe-2025-12-15", "gpt-4o-transcribe-diarize"}));
+        config.baseUrl = "https://api.openai.com.example.test";
+        QVERIFY(!config.isOfficialOpenAi());
+        QCOMPARE(config.transcriptionModels(models), models);
+    }
     void buildsTranscriptionSession()
     {
         aha::EngineConfig config;

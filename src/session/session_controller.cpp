@@ -3,6 +3,7 @@
 #include "network/realtime_client.h"
 #include "network/text_correction.h"
 #include <QAudioSource>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QMediaDevices>
 #include <QTimer>
@@ -15,8 +16,9 @@ class SessionWorker final : public QObject
 {
     Q_OBJECT
   public:
-    SessionWorker(QString id, AppSettings settings, AudioCache *cache, QString replay)
-        : id_(std::move(id)), settings_(std::move(settings)), cache_(cache), replay_(std::move(replay))
+    SessionWorker(QString id, AppSettings settings, AudioCache *cache, QString replay, int stopTimeoutMs)
+        : id_(std::move(id)), settings_(std::move(settings)), cache_(cache), replay_(std::move(replay)),
+          stopTimeoutMs_(stopTimeoutMs)
     {
     }
     void begin()
@@ -24,6 +26,10 @@ class SessionWorker final : public QObject
         if (stopped_)
             return;
         realtime_ = new RealtimeClient(this);
+        connect(realtime_, &RealtimeClient::configurationChanged, this,
+                [this](const QJsonObject &request, const QJsonObject &effective) {
+                    emit configuration(id_, request, effective);
+                });
         correction_ = new TextCorrection(settings_.correction, settings_.engine.allowUntrustedCertificate, this);
         connect(correction_, &TextCorrection::changed, this,
                 [this](const Transcript &result) { emit transcript(id_, result); });
@@ -67,18 +73,35 @@ class SessionWorker final : public QObject
         });
         realtime_->start(settings_.engine);
     }
+    void commitTurn()
+    {
+        if (stopped_ || stopping_ || !realtime_)
+            return;
+        try {
+            drain();
+            if (converter_) {
+                const auto pcm = converter_->takePacket();
+                if (!pcm.isEmpty())
+                    push(pcm);
+            }
+            commitAudio();
+        } catch (const std::exception &error) {
+            fail(QString::fromUtf8(error.what()));
+        }
+    }
     void stop(bool cancelCorrection)
     {
-        if (cancelCorrection && correction_)
-            correction_->cancel();
-        if (stopping_)
+        if (stopped_)
             return;
-        if (stopped_) {
-            emit ended(id_);
+        if (cancelCorrection || failing_) {
+            if (correction_)
+                correction_->cancel();
+            finishStop();
             return;
         }
+        if (stopping_)
+            return;
         stopping_ = true;
-        // Flush the converter before closing the connection, including a short final chunk.
         try {
             if (input_)
                 drain();
@@ -88,13 +111,75 @@ class SessionWorker final : public QObject
                 input_ = nullptr;
             }
             if (converter_)
-                for (const QByteArray &pcm : converter_->feed({}, true))
+                for (const auto &pcm : converter_->feed({}, true))
                     push(pcm);
         } catch (const std::exception &error) {
-            emit failure(id_, QString::fromUtf8(error.what()));
+            fail(QString::fromUtf8(error.what()));
+            return;
         }
+        if (replayTimer_)
+            replayTimer_->stop();
+        if (stopped_)
+            return;
+        if (realtime_)
+            commitAudio();
+        emit level(id_, 0);
+        stopElapsed_.start();
+        auto *settle = new QTimer(this);
+        settle->setInterval(25);
+        connect(settle, &QTimer::timeout, this, [this, settle] {
+            if (stopped_) {
+                settle->stop();
+                settle->deleteLater();
+                return;
+            }
+            if ((!realtime_ || !realtime_->hasPending()) && (!correction_ || !correction_->busy())) {
+                settle->stop();
+                settle->deleteLater();
+                finishStop();
+            } else if (stopElapsed_.elapsed() >= stopTimeoutMs_) {
+                settle->stop();
+                settle->deleteLater();
+                fail(QStringLiteral("等待最终转写或纠错结果超时（30 秒）；已完成结果已保留"));
+            }
+        });
+        if ((!realtime_ || !realtime_->hasPending()) && (!correction_ || !correction_->busy())) {
+            settle->deleteLater();
+            finishStop();
+        } else
+            settle->start();
+    }
+  signals:
+    void connected(const QString &id);
+    void configuration(const QString &id, const QJsonObject &request, const QJsonObject &effective);
+    void recording(const QString &id);
+    void status(const QString &id, const QString &label, const QString &detail);
+    void transcript(const QString &id, const aha::Transcript &result);
+    void level(const QString &id, float value);
+    void failure(const QString &id, const QString &message);
+    void ended(const QString &id);
+
+  private:
+    void commitAudio()
+    {
+        if (!realtime_)
+            return;
+        const auto bytes = realtime_->uncommittedBytes();
+        if (bytes > 0 && bytes < 4800)
+            push(QByteArray(4800 - bytes, '\0'));
+        if (!stopped_)
+            realtime_->commit();
+    }
+    void finishStop()
+    {
+        if (stopped_)
+            return;
         stopped_ = true;
-        stopping_ = false;
+        if (audio_) {
+            disconnect(audio_, nullptr, this, nullptr);
+            audio_->stop();
+            input_ = nullptr;
+        }
         if (replayTimer_)
             replayTimer_->stop();
         if (realtime_)
@@ -104,16 +189,6 @@ class SessionWorker final : public QObject
         emit level(id_, 0);
         emit ended(id_);
     }
-  signals:
-    void connected(const QString &id);
-    void recording(const QString &id);
-    void status(const QString &id, const QString &label, const QString &detail);
-    void transcript(const QString &id, const aha::Transcript &result);
-    void level(const QString &id, float value);
-    void failure(const QString &id, const QString &message);
-    void ended(const QString &id);
-
-  private:
     void fail(const QString &message)
     {
         if (stopped_ || failing_)
@@ -164,7 +239,7 @@ class SessionWorker final : public QObject
                 const QByteArray bytes = replayFile_->read(4800);
                 if (bytes.isEmpty()) {
                     replayTimer_->stop();
-                    QTimer::singleShot(30000, this, [this] { stop(false); });
+                    stop(false);
                 } else
                     push(bytes);
             });
@@ -217,9 +292,12 @@ class SessionWorker final : public QObject
     bool stopped_ = false, failing_ = false, stopping_ = false;
     bool capturingStarted_ = false;
     QString lastLabel_;
+    QElapsedTimer stopElapsed_;
+    int stopTimeoutMs_;
 };
 
-SessionController::SessionController(QObject *parent) : QObject(parent)
+SessionController::SessionController(QObject *parent, int stopTimeoutMs)
+    : QObject(parent), stopTimeoutMs_(qMax(1, stopTimeoutMs))
 {
     qRegisterMetaType<Transcript>();
     networkThread_.setObjectName(QStringLiteral("speech-session"));
@@ -277,7 +355,7 @@ void SessionController::launch()
     cache_ = new AudioCache(id, settings.cache);
     cache_->moveToThread(&storageThread_);
     connect(&storageThread_, &QThread::finished, cache_, &QObject::deleteLater);
-    worker_ = new SessionWorker(id, settings, cache_, replay_);
+    worker_ = new SessionWorker(id, settings, cache_, replay_, stopTimeoutMs_);
     worker_->moveToThread(&networkThread_);
     connect(&networkThread_, &QThread::finished, worker_, &QObject::deleteLater);
     connect(cache_, &AudioCache::opened, this, [this, id](const QString &, const QString &directory) {
@@ -318,6 +396,11 @@ void SessionController::launch()
             emit connected(origin.toString());
         }
     });
+    connect(worker_, &SessionWorker::configuration, this,
+            [this](const QString &id, const QJsonObject &request, const QJsonObject &effective) {
+                if (id == id_ && !stopRequested_)
+                    emit configurationChanged(request, effective);
+            });
     connect(worker_, &SessionWorker::recording, this, [this](const QString &id) {
         if (id == id_ && !stopRequested_)
             emit started();
@@ -373,6 +456,15 @@ void SessionController::stop()
         QMetaObject::invokeMethod(worker, [worker] {
             if (worker)
                 worker->stop(false);
+        });
+}
+void SessionController::commitTurn()
+{
+    auto worker = worker_;
+    if (worker && !stopRequested_)
+        QMetaObject::invokeMethod(worker, [worker] {
+            if (worker)
+                worker->commitTurn();
         });
 }
 void SessionController::acknowledgeTranscript(const QString &itemId)

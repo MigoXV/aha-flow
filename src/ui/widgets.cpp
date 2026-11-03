@@ -6,9 +6,57 @@
 #include <QTextBlock>
 #include <QTextCursor>
 #include <cmath>
+#include <QListView>
+#include <QSignalBlocker>
 
 namespace aha
 {
+IconComboBox::IconComboBox(QWidget *parent) : QComboBox(parent)
+{
+    setMaxVisibleItems(8);
+    auto *list = new QListView(this);
+    list->setUniformItemSizes(true);
+    list->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    list->setTextElideMode(Qt::ElideRight);
+    setView(list);
+}
+void IconComboBox::replaceItems(const QStringList &items, const QString &selected, bool preserveSelected)
+{
+    if (popupOpen_) {
+        pendingItems_ = items;
+        preservePendingSelection_ = preserveSelected;
+        pendingUpdate_ = true;
+        return;
+    }
+    pendingUpdate_ = false;
+    const QSignalBlocker blocker(this);
+    clear();
+    if (preserveSelected && !selected.isEmpty() && !items.contains(selected))
+        addItem(selected);
+    addItems(items);
+    setCurrentText(items.contains(selected) || preserveSelected ? selected : items.value(0));
+}
+void IconComboBox::showPopup()
+{
+    popupOpen_ = true;
+    QComboBox::showPopup();
+}
+void IconComboBox::hidePopup()
+{
+    QComboBox::hidePopup();
+    popupOpen_ = false;
+    // Selection activation is delivered after hidePopup. Apply after it, preserving the user's choice.
+    QTimer::singleShot(0, this, [this] {
+        if (!popupOpen_ && pendingUpdate_) {
+            pendingUpdate_ = false;
+            const auto before = currentText();
+            replaceItems(pendingItems_, before, preservePendingSelection_);
+            if (currentText() != before)
+                emit currentTextChanged(currentText());
+        }
+    });
+}
 void IconComboBox::paintEvent(QPaintEvent *event)
 {
     QComboBox::paintEvent(event);

@@ -14,10 +14,19 @@ namespace aha
 class IconComboBox final : public QComboBox
 {
   public:
-    using QComboBox::QComboBox;
+    explicit IconComboBox(QWidget *parent = nullptr);
+    void replaceItems(const QStringList &items, const QString &selected, bool preserveSelected = true);
+    void showPopup() override;
+    void hidePopup() override;
 
   protected:
     void paintEvent(QPaintEvent *event) override;
+
+  private:
+    QStringList pendingItems_;
+    bool preservePendingSelection_ = true;
+    bool pendingUpdate_ = false;
+    bool popupOpen_ = false;
 };
 
 class ElidedLabel final : public QLabel

@@ -1,6 +1,7 @@
 #include "core/engine_config.h"
 
 #include <QUrlQuery>
+#include <QRegularExpression>
 
 namespace aha
 {
@@ -25,6 +26,25 @@ QUrl EngineConfig::serviceUrl(const QString &path) const
     url.setQuery(QString());
     url.setFragment(QString());
     return url;
+}
+
+bool EngineConfig::isOfficialOpenAi() const
+{
+    return modelsUrl().host().compare(QStringLiteral("api.openai.com"), Qt::CaseInsensitive) == 0;
+}
+QStringList EngineConfig::transcriptionModels(const QStringList &models) const
+{
+    if (!isOfficialOpenAi())
+        return models;
+    // Official transcription-session model families, including dated snapshots.
+    static const QRegularExpression supported(QStringLiteral(
+        "^(whisper-1|gpt-(4o-transcribe(-diarize)?|4o-mini-transcribe|live-transcribe|transcribe|realtime-whisper))"
+        "(-[0-9]{4}-[0-9]{2}-[0-9]{2})?$"));
+    QStringList result;
+    for (const auto &model : models)
+        if (supported.match(model).hasMatch() && !result.contains(model))
+            result.append(model);
+    return result;
 }
 
 QUrl EngineConfig::modelsUrl() const

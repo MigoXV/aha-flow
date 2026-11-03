@@ -15,6 +15,13 @@ class PcmConverter
     PcmConverter(const PcmConverter &) = delete;
     PcmConverter &operator=(const PcmConverter &) = delete;
     QList<QByteArray> feed(const QByteArray &data, bool final = false);
+    // Flush a partial network packet without ending the streaming resampler.
+    QByteArray takePacket()
+    {
+        QByteArray packet;
+        packet.swap(pcm_);
+        return packet;
+    }
     float level() const
     {
         return level_;
