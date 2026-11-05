@@ -164,6 +164,11 @@ QString themeStyleSheet(bool dark)
         QComboBox::drop-down { border: 0; width: 28px; }
         QComboBox::down-arrow { image: none; width: 0; height: 0; }
         QComboBox QAbstractItemView { background: @surface; selection-background-color: @hover; color: @text; }
+        QMenu { background: @surface; border: 1px solid @border; padding: 4px; }
+        QMenu::item { padding: 6px 24px 6px 12px; }
+        QMenu::item:selected { background: @hover; }
+        QMenu::item:disabled { color: @secondary; }
+        QMenu::separator { height: 1px; background: @border; margin: 4px 8px; }
         QTabWidget::pane { border: 0; }
         QTabBar { border-bottom: 1px solid @border; }
         QTabBar::tab { color: @secondary; border-bottom: 1px solid transparent; padding: 0 0 6px 0;

@@ -3,6 +3,7 @@
 set -euo pipefail
 archive=$(readlink -f "$1")
 probe=$(readlink -f "$2")
+tray_probe=${3:-}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/包含 空格" "$work/home"
@@ -39,4 +40,12 @@ QT_QPA_PLATFORM=offscreen timeout 20 "$app/aha-flow" --smoke-test
 # 第二阶段安装 Xvfb 后验证真实 xcb 平台路径，不依赖局域网或麦克风。
 if command -v xvfb-run >/dev/null; then
     QT_QPA_PLATFORM=xcb timeout 20 xvfb-run -a "$app/aha-flow" --smoke-test
+    if [[ -n "$tray_probe" ]]; then
+        # Verify the packaged executable exports a real tray icon/menu and exits from its menu.
+        # Test-only session bus and X server; no desktop extension or engine is required.
+        timeout 25 dbus-run-session -- xvfb-run -a env \
+            LD_LIBRARY_PATH="$app/lib:$(dirname "$tray_probe")/tray-runtime" QT_PLUGIN_PATH="$app/plugins" \
+            AHA_FLOW_TRAY_TEST_APP="$app/aha-flow" QT_QPA_PLATFORM=xcb \
+            "$tray_probe" applicationExportsTrayAndExitsFromMenu
+    fi
 fi

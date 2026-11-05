@@ -26,14 +26,16 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build qt6-base-dev qt6-multimedia-dev qt6-websockets-dev qt6-svg-dev qt6-wayland libssl-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good
+          sudo apt-get install -y --no-install-recommends ninja-build qt6-base-dev qt6-multimedia-dev qt6-websockets-dev qt6-svg-dev qt6-wayland libssl-dev gstreamer1.0-plugins-base gstreamer1.0-plugins-good xvfb xauth dbus
       - name: Configure
         run: cmake --preset release -DAHA_PORTABLE_LINUX=ON
       - name: Build
         run: |
           cmake --build --preset release --parallel 2 2>&1 | tee build/release/build.log
       - name: Test without the LAN engine
-        run: ctest --preset release
+        run: |
+          test -x build/release/tests/aha_tray_integration_tests
+          ctest --preset release
       - name: Package
         working-directory: build/release
         run: cpack -G TGZ 2>&1 | tee package.log
@@ -42,16 +44,16 @@ jobs:
           docker run --rm \
             -v "$PWD:/source:ro" ubuntu:24.04 bash -ec '
               test -z "$(dpkg-query -W "libqt6*" 2>/dev/null)"
-              bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe
+              bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe /source/build/release/tests/aha_tray_integration_tests
               apt-get update
-              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth pulseaudio pulseaudio-utils
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb xauth dbus pulseaudio pulseaudio-utils
               pulseaudio --start --exit-idle-time=-1 --load="module-native-protocol-unix socket=/tmp/aha-flow-pulse.sock auth-anonymous=1"
               export PULSE_SERVER=unix:/tmp/aha-flow-pulse.sock
               pactl load-module module-null-sink sink_name=aha_test
               pactl load-module module-remap-source master=aha_test.monitor source_name=aha_input
               pactl set-default-source aha_input
               export AHA_TEST_AUDIO=1
-              bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe
+              bash /source/packaging/test-linux-package.sh /source/build/release/aha-flow-*-ubuntu24.04-x86_64.tar.gz /source/build/release/tests/aha_runtime_probe /source/build/release/tests/aha_tray_integration_tests
             ' 2>&1 | tee build/release/package-test.log
       - name: Upload Linux verification evidence
         if: always()
@@ -60,7 +62,10 @@ jobs:
           name: aha-flow-linux-verification
           path: |
             build/release/*.log
+            build/release/Testing/Temporary/LastTest.log
             build/release/tests/aha_runtime_probe
+            build/release/tests/aha_tray_integration_tests
+            build/release/tests/tray-runtime/
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:

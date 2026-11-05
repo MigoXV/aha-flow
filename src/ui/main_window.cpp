@@ -33,6 +33,8 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWindow>
+#include <QShowEvent>
+#include <QHideEvent>
 
 namespace aha
 {
@@ -138,6 +140,7 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     expandButton_->setObjectName("compactButton");
     headerLayout->addWidget(expandButton_);
     auto *close = button("close", QStringLiteral("关闭窗口"), header_);
+    closeButton_ = close;
     headerLayout->addWidget(close);
     layout->addWidget(header_);
     for (QWidget *drag :
@@ -414,12 +417,18 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     connect(&session_, &SessionController::finished, this, [this] {
         recording_ = false;
         updateElapsed();
+        updateTrayState();
+        if (closing_)
+            session_.shutdown();
     });
     connect(
         &session_, &SessionController::shutdownReady, this,
         [this] {
             canClose_ = true;
+            if (tray_)
+                tray_->hide();
             this->close();
+            emit exitReady();
         },
         Qt::QueuedConnection);
     auto *clock = new QTimer(this);
@@ -439,6 +448,87 @@ void MainWindow::setRuntimeOverrides(const QString &engine, const QString &key, 
     runtimeSelfSigned_ = allowSelfSigned;
     if (!engine.isEmpty())
         address_->setToolTip(QStringLiteral("本次运行覆盖服务地址：%1").arg(engine));
+}
+void MainWindow::enableSystemTray(const QIcon &icon, SystemTray::Availability availability)
+{
+    if (tray_)
+        return;
+    tray_ = new SystemTray(icon, this, std::move(availability));
+    connect(tray_, &SystemTray::windowToggleRequested, this, &MainWindow::toggleTrayWindow);
+    connect(tray_, &SystemTray::windowRestoreRequested, this, &MainWindow::restoreWindow);
+    connect(tray_, &SystemTray::recordingToggleRequested, this, &MainWindow::toggleRecording);
+    connect(tray_, &SystemTray::settingsRequested, this, [this] {
+        if (!closing_) {
+            restoreWindow();
+            showSettings(true);
+        }
+    });
+    connect(tray_, &SystemTray::exitRequested, this, &MainWindow::requestExit);
+    connect(tray_, &SystemTray::availabilityChanged, this, [this](bool available) {
+        if (!available && !closing_ && !isVisible())
+            restoreWindow();
+        updateTrayState();
+    });
+    updateTrayState();
+}
+void MainWindow::restoreWindow()
+{
+    if (closing_)
+        return;
+    // Preserve compact/expanded geometry while clearing only the minimized state.
+    setWindowState(windowState() & ~Qt::WindowMinimized);
+    show();
+    raise();
+    activateWindow();
+}
+void MainWindow::toggleTrayWindow()
+{
+    if (closing_)
+        return;
+    if (isVisible() && !isMinimized() && tray_ && tray_->available()) {
+        showSettings(false);
+        hide();
+    } else
+        restoreWindow();
+}
+void MainWindow::updateTrayState()
+{
+    const bool available = tray_ && tray_->available();
+    closeButton_->setToolTip(available ? QStringLiteral("隐藏到托盘（继续识别）") : QStringLiteral("退出 aha-flow"));
+    closeButton_->setAccessibleName(closeButton_->toolTip());
+    if (tray_) {
+        const bool busy = statusLabel_ == QStringLiteral("连接中") || statusLabel_ == QStringLiteral("停止中");
+        tray_->updateState(statusLabel_, session_.active(), busy, closing_);
+        tray_->updateWindowVisibility(isVisible() && !isMinimized());
+    }
+}
+void MainWindow::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    updateTrayState();
+}
+void MainWindow::hideEvent(QHideEvent *event)
+{
+    QWidget::hideEvent(event);
+    updateTrayState();
+}
+void MainWindow::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::WindowStateChange)
+        updateTrayState();
+}
+void MainWindow::requestExit()
+{
+    if (closing_)
+        return;
+    closing_ = true;
+    showSettings(false);
+    setStatus(QStringLiteral("停止中"), QStringLiteral("正在等待最终结果、保存录音并退出"));
+    if (session_.active())
+        session_.stop();
+    else
+        session_.shutdown();
 }
 void MainWindow::saveSettings()
 {
@@ -460,6 +550,8 @@ void MainWindow::refreshModels()
 }
 void MainWindow::startRecognition()
 {
+    if (closing_)
+        return;
     AppSettings snapshot = settings_;
     if (!runtimeEngine_.isEmpty())
         snapshot.engine.baseUrl = runtimeEngine_;
@@ -486,6 +578,8 @@ void MainWindow::startRecognition()
 }
 void MainWindow::toggleRecording()
 {
+    if (closing_)
+        return;
     if (session_.active())
         session_.stop();
     else
@@ -607,6 +701,7 @@ void MainWindow::setStatus(const QString &label, const QString &detail)
     caption_->setText(display);
     caption_->setToolTip(detail.isEmpty() ? label : detail);
     updateSessionMetadata();
+    updateTrayState();
 }
 void MainWindow::updateSessionMetadata()
 {
@@ -846,9 +941,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
     event->ignore();
     if (closing_)
         return;
-    closing_ = true;
-    showSettings(false);
-    setStatus(QStringLiteral("停止中"), QStringLiteral("正在保存录音并关闭窗口"));
-    session_.shutdown();
+    if (tray_ && tray_->available()) {
+        showSettings(false);
+        hide();
+        return;
+    }
+    requestExit();
 }
 } // namespace aha

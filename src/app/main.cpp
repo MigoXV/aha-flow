@@ -137,10 +137,13 @@ int main(int argc, char *argv[])
     if (benchmark)
         QObject::connect(&window, &aha::MainWindow::firstFrameRendered, &window,
                          [&] { QTextStream(stdout) << "first_frame_ms=" << startup.elapsed() << Qt::endl; });
+    QObject::connect(&window, &aha::MainWindow::exitReady, app.get(), &QCoreApplication::quit);
+    if (!smoke && !benchmark)
+        window.enableSystemTray(QApplication::windowIcon());
     window.show();
     if (smoke)
-        QTimer::singleShot(100, &window, &QWidget::close);
+        QTimer::singleShot(100, &window, &aha::MainWindow::requestExit);
     if (benchmark)
-        QTimer::singleShot(5000, &window, &QWidget::close);
+        QTimer::singleShot(5000, &window, &aha::MainWindow::requestExit);
     return app->exec();
 }
