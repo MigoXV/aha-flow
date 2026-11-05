@@ -43,8 +43,9 @@ if command -v xvfb-run >/dev/null; then
     if [[ -n "$tray_probe" ]]; then
         # Verify the packaged executable exports a real tray icon/menu and exits from its menu.
         # Test-only session bus and X server; no desktop extension or engine is required.
-        LD_LIBRARY_PATH="$app/lib" QT_PLUGIN_PATH="$app/plugins" \
+        timeout 25 dbus-run-session -- xvfb-run -a env \
+            LD_LIBRARY_PATH="$app/lib:$(dirname "$tray_probe")/tray-runtime" QT_PLUGIN_PATH="$app/plugins" \
             AHA_FLOW_TRAY_TEST_APP="$app/aha-flow" QT_QPA_PLATFORM=xcb \
-            timeout 25 dbus-run-session -- xvfb-run -a "$tray_probe" applicationExportsTrayAndExitsFromMenu
+            "$tray_probe" applicationExportsTrayAndExitsFromMenu
     fi
 fi

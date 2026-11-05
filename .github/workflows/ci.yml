@@ -65,6 +65,7 @@ jobs:
             build/release/Testing/Temporary/LastTest.log
             build/release/tests/aha_runtime_probe
             build/release/tests/aha_tray_integration_tests
+            build/release/tests/tray-runtime/
           if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:

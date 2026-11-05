@@ -68,6 +68,11 @@ if(UNIX AND NOT APPLE)
         target_link_libraries(aha_tray_integration_tests PRIVATE aha_ui Qt6::DBus Qt6::Test aha_options)
         target_compile_definitions(aha_tray_integration_tests PRIVATE AHA_FLOW_EXECUTABLE="$<TARGET_FILE:aha-flow>")
         add_dependencies(aha_tray_integration_tests aha-flow)
+        # Test-only dependency for the clean container; do not add QtTest to the user package.
+        add_custom_command(TARGET aha_tray_integration_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:aha_tray_integration_tests>/tray-runtime
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:Qt6::Test>
+                $<TARGET_FILE_DIR:aha_tray_integration_tests>/tray-runtime/libQt6Test.so.6)
         add_test(NAME tray_desktop_integration COMMAND ${AHA_DBUS_RUN_SESSION} -- ${AHA_XVFB_RUN} -a
             ${CMAKE_COMMAND} -E env QT_QPA_PLATFORM=xcb $<TARGET_FILE:aha_tray_integration_tests>)
         set_tests_properties(tray_desktop_integration PROPERTIES TIMEOUT 20)
