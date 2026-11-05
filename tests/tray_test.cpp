@@ -94,6 +94,8 @@ class TrayTest final : public QObject
         icon->activated(QSystemTrayIcon::Context);
         QVERIFY(window.isVisible());
         icon->activated(QSystemTrayIcon::Trigger);
+        QVERIFY(window.isVisible());
+        action(window, "trayWindow")->trigger();
         QVERIFY(!window.isVisible());
         icon->activated(QSystemTrayIcon::DoubleClick);
         QVERIFY(window.isVisible());

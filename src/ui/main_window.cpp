@@ -480,6 +480,8 @@ void MainWindow::restoreWindow()
     show();
     raise();
     activateWindow();
+    if (windowHandle())
+        windowHandle()->requestActivate();
 }
 void MainWindow::toggleTrayWindow()
 {

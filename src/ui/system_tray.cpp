@@ -29,9 +29,7 @@ SystemTray::SystemTray(const QIcon &icon, QWidget *window, Availability availabi
     connect(settingsAction_, &QAction::triggered, this, &SystemTray::settingsRequested);
     connect(exitAction_, &QAction::triggered, this, &SystemTray::exitRequested);
     connect(icon_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
-        if (reason == QSystemTrayIcon::Trigger)
-            emit windowToggleRequested();
-        else if (reason == QSystemTrayIcon::DoubleClick)
+        if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick)
             emit windowRestoreRequested();
     });
     icon_->setContextMenu(menu_);
