@@ -213,6 +213,7 @@ class TrayTest final : public QObject
             QCOMPARE(action(window, "trayRecording")->text(), QString("开始识别"));
         }
         action(window, "trayExit")->trigger();
+        QVERIFY(!window.findChild<QSystemTrayIcon *>()->isVisible());
         action(window, "trayExit")->trigger();
         window.requestExit();
         QVERIFY(!action(window, "trayRecording")->isEnabled());

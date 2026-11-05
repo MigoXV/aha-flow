@@ -525,6 +525,8 @@ void MainWindow::requestExit()
     if (closing_)
         return;
     closing_ = true;
+    if (tray_)
+        tray_->hide();
     showSettings(false);
     setStatus(QStringLiteral("停止中"), QStringLiteral("正在等待最终结果、保存录音并退出"));
     if (session_.active())
