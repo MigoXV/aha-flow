@@ -117,7 +117,8 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     realtimeDraft_ = settings.engine.realtimeDraft;
     setObjectName("settingsDialog");
     setWindowTitle(QStringLiteral("aha-flow 设置"));
-    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+    setWindowFlag(Qt::WindowStaysOnTopHint, settings.alwaysOnTop);
     setAttribute(Qt::WA_TranslucentBackground);
     setFont(uiFont(12));
     setFixedWidth(480);
@@ -516,6 +517,11 @@ SettingsWindow::SettingsWindow(const AppSettings &settings, QWidget *parent) : Q
     cache->addWidget(retention);
 
     auto *appearance = page(tabs_, QStringLiteral("外观"));
+    auto *alwaysOnTop = preference(appearance, QStringLiteral("始终置顶"),
+                                   QStringLiteral("让主窗口和设置窗口保持在其他窗口前面，立即生效。"),
+                                   settings.alwaysOnTop);
+    alwaysOnTop->setObjectName("alwaysOnTop");
+    connect(alwaysOnTop, &QCheckBox::toggled, this, &SettingsWindow::alwaysOnTopChanged);
     appearance->addWidget(label(QStringLiteral("界面主题"), shell));
     auto *choices = new QHBoxLayout;
     choices->setSpacing(16);

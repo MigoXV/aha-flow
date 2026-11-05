@@ -39,6 +39,7 @@ class SettingsWindow final : public QDialog
   signals:
     void realtimeChanged(const QJsonObject &options, const QJsonObject &draft, const QString &languageMode);
     void themeSelected(const QString &name);
+    void alwaysOnTopChanged(bool enabled);
 
   protected:
     bool eventFilter(QObject *object, QEvent *event) override;

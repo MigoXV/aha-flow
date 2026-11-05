@@ -66,7 +66,8 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     initializeUiResources();
     setObjectName("floatingWindow");
     setWindowTitle("aha-flow");
-    setWindowFlags(Qt::Window | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
+    setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+    setWindowFlag(Qt::WindowStaysOnTopHint, settings.alwaysOnTop);
     setAttribute(Qt::WA_TranslucentBackground);
     setFont(uiFont());
     setFocusPolicy(Qt::StrongFocus);
@@ -376,6 +377,21 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
         saveSettings();
         applyTheme();
     });
+    connect(settingsWindow_, &SettingsWindow::alwaysOnTopChanged, this, [this](bool enabled) {
+        settings_.alwaysOnTop = enabled;
+        saveSettings();
+        // Changing native flags hides a window; restore only windows already visible.
+        for (QWidget *window : {static_cast<QWidget *>(this), static_cast<QWidget *>(settingsWindow_)}) {
+            const bool visible = window->isVisible();
+            const auto geometry = window->geometry();
+            const auto state = window->windowState();
+            window->setWindowFlag(Qt::WindowStaysOnTopHint, enabled);
+            window->setGeometry(geometry);
+            window->setWindowState(state);
+            if (visible)
+                window->show();
+        }
+    });
     connect(close, &QToolButton::clicked, this, &QWidget::close);
     connect(&engine_, &EngineClient::modelsReady, this, [this](const QStringList &models) {
         EngineConfig effective = settings_.engine;
@@ -480,6 +496,8 @@ void MainWindow::restoreWindow()
     show();
     raise();
     activateWindow();
+    if (windowHandle())
+        windowHandle()->requestActivate();
 }
 void MainWindow::toggleTrayWindow()
 {
@@ -523,6 +541,8 @@ void MainWindow::requestExit()
     if (closing_)
         return;
     closing_ = true;
+    if (tray_)
+        tray_->hide();
     showSettings(false);
     setStatus(QStringLiteral("停止中"), QStringLiteral("正在等待最终结果、保存录音并退出"));
     if (session_.active())

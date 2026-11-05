@@ -94,6 +94,8 @@ class TrayTest final : public QObject
         icon->activated(QSystemTrayIcon::Context);
         QVERIFY(window.isVisible());
         icon->activated(QSystemTrayIcon::Trigger);
+        QVERIFY(window.isVisible());
+        action(window, "trayWindow")->trigger();
         QVERIFY(!window.isVisible());
         icon->activated(QSystemTrayIcon::DoubleClick);
         QVERIFY(window.isVisible());
@@ -211,6 +213,7 @@ class TrayTest final : public QObject
             QCOMPARE(action(window, "trayRecording")->text(), QString("开始识别"));
         }
         action(window, "trayExit")->trigger();
+        QVERIFY(!window.findChild<QSystemTrayIcon *>()->isVisible());
         action(window, "trayExit")->trigger();
         window.requestExit();
         QVERIFY(!action(window, "trayRecording")->isEnabled());
