@@ -1,4 +1,4 @@
-add_library(aha_ui STATIC main_window.cpp main_window.h settings_window.cpp settings_window.h theme.cpp theme.h widgets.cpp widgets.h)
+add_library(aha_ui STATIC main_window.cpp main_window.h system_tray.cpp system_tray.h settings_window.cpp settings_window.h theme.cpp theme.h widgets.cpp widgets.h)
 target_link_libraries(aha_ui PUBLIC aha_session Qt6::Widgets PRIVATE Qt6::Svg aha_options)
 qt_add_resources(aha_ui "aha_ui_assets" PREFIX "/aha/ui" BASE "assets" FILES
     assets/vallum/settings.svg

@@ -5,6 +5,7 @@
 #include <QElapsedTimer>
 #include <QSettings>
 #include <QWidget>
+#include "ui/system_tray.h"
 
 class QCheckBox;
 class QComboBox;
@@ -29,6 +30,9 @@ class MainWindow final : public QWidget
     void refreshModels();
     void startRecognition();
     void toggleCompact();
+    void enableSystemTray(const QIcon &icon, SystemTray::Availability availability = {});
+    void restoreWindow();
+    void requestExit();
     void showSettings(bool visible);
     SessionController *session()
     {
@@ -36,15 +40,21 @@ class MainWindow final : public QWidget
     }
   signals:
     void firstFrameRendered();
+    void exitReady();
 
   protected:
     void paintEvent(QPaintEvent *event) override;
     bool eventFilter(QObject *object, QEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
   private:
     void saveSettings();
+    void updateTrayState();
+    void toggleTrayWindow();
     void setStatus(const QString &label, const QString &detail);
     void updateTranscript(const Transcript &result);
     void renderTranscript(int index);
@@ -82,6 +92,8 @@ class MainWindow final : public QWidget
     QLineEdit *language_, *apiKey_, *correctionUrl_, *cacheDirectory_;
     QCheckBox *allowUntrusted_, *enableAha_, *enableCorrection_, *enableCache_;
     QSlider *sliceSeconds_;
+    SystemTray *tray_ = nullptr;
+    QToolButton *closeButton_ = nullptr;
     SettingsWindow *settingsWindow_ = nullptr;
     QTextEdit *transcript_;
     InputLevelMeter *meter_;
