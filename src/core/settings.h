@@ -20,6 +20,7 @@ struct AppSettings {
     CorrectionConfig correction;
     QStringList recentServers;
     QString theme = QStringLiteral("vallum");
+    bool alwaysOnTop = true;
 
     static QString defaultCacheDirectory();
     static AppSettings load(QSettings &store);

@@ -54,6 +54,55 @@ class UiTest final : public QObject
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settingsDirectory_.path());
         QApplication::setFont(aha::uiFont());
     }
+    void alwaysOnTopAppliesAndPersists()
+    {
+        aha::AppSettings settings;
+        aha::MainWindow window(settings, false);
+        window.show();
+        window.toggleCompact();
+        window.showSettings(true);
+        auto *dialog = window.findChild<aha::SettingsWindow *>();
+        auto *toggle = dialog->findChild<QCheckBox *>("alwaysOnTop");
+        QVERIFY(toggle);
+        QVERIFY(toggle->isChecked());
+        QVERIFY(window.windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+        const auto geometry = window.geometry();
+        const QString captures = qEnvironmentVariable("AHA_FLOW_SCREENSHOT_DIR");
+        if (!captures.isEmpty()) {
+            QDir().mkpath(captures);
+            auto *tabs = dialog->findChild<QTabWidget *>("settingsTabs");
+            tabs->setCurrentIndex(tabs->count() - 1);
+            for (const QString &theme : {QStringLiteral("vallum"), QStringLiteral("abyssus")}) {
+                dialog->findChild<QPushButton *>(theme == "vallum" ? "themeVallum" : "themeAbyssus")->click();
+                QCoreApplication::processEvents();
+                dialog->grab().save(QDir(captures).filePath(QString("appearance-%1.png").arg(theme)));
+            }
+        }
+        toggle->setChecked(false);
+        QVERIFY(window.isVisible());
+        QVERIFY(dialog->isVisible());
+        QCOMPARE(window.geometry(), geometry);
+        QVERIFY(!window.windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+        QVERIFY(!dialog->windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+        QSettings store;
+        const auto saved = aha::AppSettings::load(store);
+        QVERIFY(!saved.alwaysOnTop);
+        aha::MainWindow restored(saved, false);
+        QVERIFY(!restored.windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+        QVERIFY(!restored.findChild<aha::SettingsWindow *>()->windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+        window.hide();
+        toggle->setChecked(true);
+        QVERIFY(!window.isVisible());
+        QVERIFY(dialog->isVisible());
+        QCOMPARE(window.geometry(), geometry);
+        QVERIFY(window.windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+        QVERIFY(dialog->windowFlags().testFlag(Qt::WindowStaysOnTopHint));
+        QVERIFY(aha::AppSettings::load(store).alwaysOnTop);
+        window.showMinimized();
+        toggle->setChecked(false);
+        QVERIFY(window.isMinimized());
+        QVERIFY(window.isVisible());
+    }
     void modelPopupStaysBoundedDuringRefresh()
     {
         for (const auto &theme : {"vallum", "abyssus"}) {
