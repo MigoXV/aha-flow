@@ -62,6 +62,7 @@ jobs:
           name: aha-flow-linux-verification
           path: |
             build/release/*.log
+            build/release/Testing/Temporary/LastTest.log
             build/release/tests/aha_runtime_probe
             build/release/tests/aha_tray_integration_tests
           if-no-files-found: ignore
