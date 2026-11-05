@@ -16,6 +16,7 @@
 #include <QSystemTrayIcon>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTextStream>
 
 // A desktop tray host on an isolated session bus. Exercise Qt's real SNI backend,
 // rather than replacing isSystemTrayAvailable or assuming a running process has an icon.
@@ -47,6 +48,7 @@ class TrayHost final : public QObject, protected QDBusContext
         service = item.startsWith('/') ? message().service() : item;
         path = item.startsWith('/') ? item : QString("/StatusNotifierItem");
         registered.append(service + path);
+        QTextStream(stdout) << "REGISTERED " << service << ' ' << path << Qt::endl;
         emit StatusNotifierItemRegistered(service + path);
     }
     void RegisterStatusNotifierHost(const QString &) {}
@@ -54,6 +56,49 @@ class TrayHost final : public QObject, protected QDBusContext
     void StatusNotifierItemRegistered(const QString &service);
     void StatusNotifierItemUnregistered(const QString &service);
     void StatusNotifierHostRegistered();
+};
+
+// Qt 6.4 introspects the watcher synchronously: a watcher in the UI thread
+// deadlocks. A separate host process also matches how real desktop panels run.
+class TrayHostProcess : public QObject
+{
+  public:
+    TrayHostProcess()
+    {
+        connect(&process, &QProcess::readyReadStandardOutput, this, [this] {
+            output += process.readAllStandardOutput();
+            while (output.contains('\n')) {
+                const int end = output.indexOf('\n');
+                const auto parts = output.left(end).trimmed().split(' ');
+                output.remove(0, end + 1);
+                if (parts.value(0) == "READY")
+                    ready = true;
+                if (parts.value(0) == "REGISTERED") {
+                    service = QString::fromUtf8(parts.value(1));
+                    path = QString::fromUtf8(parts.value(2));
+                }
+            }
+        });
+        process.start(QCoreApplication::applicationFilePath(), {"--tray-host"});
+    }
+    ~TrayHostProcess() override
+    {
+        stop();
+    }
+    void stop()
+    {
+        if (process.state() != QProcess::NotRunning) {
+            process.terminate();
+            if (!process.waitForFinished(1000)) {
+                process.kill();
+                process.waitForFinished(1000);
+            }
+        }
+    }
+    QProcess process;
+    bool ready = false;
+    QString service, path;
+    QByteArray output;
 };
 
 namespace
@@ -92,11 +137,8 @@ class TrayIntegrationTest final : public QObject
         QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, directory.path());
         auto bus = QDBusConnection::sessionBus();
         QVERIFY(bus.isConnected());
-        TrayHost host;
-        QVERIFY(bus.registerObject("/StatusNotifierWatcher", &host,
-                                   QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals |
-                                       QDBusConnection::ExportAllProperties));
-        QVERIFY(bus.registerService("org.kde.StatusNotifierWatcher"));
+        TrayHostProcess host;
+        QTRY_VERIFY(host.ready);
         QTRY_VERIFY(QSystemTrayIcon::isSystemTrayAvailable());
         QPixmap pixels(32, 32);
         pixels.fill(Qt::darkBlue);
@@ -141,23 +183,19 @@ class TrayIntegrationTest final : public QObject
         bus.asyncCall(activate);
         QTRY_VERIFY(window.isVisible());
         window.close();
-        bus.unregisterService("org.kde.StatusNotifierWatcher");
+        host.stop();
         QTRY_VERIFY(!QSystemTrayIcon::isSystemTrayAvailable());
         QTRY_VERIFY_WITH_TIMEOUT(window.isVisible(), 5000);
         window.requestExit();
         QTRY_COMPARE(exiting.size(), 1);
         QVERIFY(!tray->isVisible());
-        bus.unregisterObject("/StatusNotifierWatcher");
     }
     void applicationExportsTrayAndExitsFromMenu()
     {
         QTemporaryDir directory;
         auto bus = QDBusConnection::sessionBus();
-        TrayHost host;
-        QVERIFY(bus.registerObject("/StatusNotifierWatcher", &host,
-                                   QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals |
-                                       QDBusConnection::ExportAllProperties));
-        QVERIFY(bus.registerService("org.kde.StatusNotifierWatcher"));
+        TrayHostProcess host;
+        QTRY_VERIFY(host.ready);
         QProcess app;
         auto environment = QProcessEnvironment::systemEnvironment();
         environment.insert("XDG_CONFIG_HOME", directory.path());
@@ -192,9 +230,25 @@ class TrayIntegrationTest final : public QObject
         QTRY_COMPARE(app.state(), QProcess::NotRunning);
         QCOMPARE(app.exitStatus(), QProcess::NormalExit);
         QCOMPARE(app.exitCode(), 0);
-        bus.unregisterService("org.kde.StatusNotifierWatcher");
-        bus.unregisterObject("/StatusNotifierWatcher");
+        host.stop();
     }
 };
-QTEST_MAIN(TrayIntegrationTest)
+int main(int argc, char **argv)
+{
+    if (argc == 2 && QByteArray(argv[1]) == "--tray-host") {
+        QCoreApplication app(argc, argv);
+        auto bus = QDBusConnection::sessionBus();
+        TrayHost host;
+        if (!bus.registerObject("/StatusNotifierWatcher", &host,
+                                QDBusConnection::ExportAllSlots | QDBusConnection::ExportAllSignals |
+                                    QDBusConnection::ExportAllProperties) ||
+            !bus.registerService("org.kde.StatusNotifierWatcher"))
+            return 1;
+        QTextStream(stdout) << "READY" << Qt::endl;
+        return app.exec();
+    }
+    QApplication app(argc, argv);
+    TrayIntegrationTest test;
+    return QTest::qExec(&test, argc, argv);
+}
 #include "tray_integration_test.moc"
