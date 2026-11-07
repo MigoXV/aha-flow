@@ -76,6 +76,8 @@ MainWindow::MainWindow(const AppSettings &settings, bool autoStart, QWidget *par
     resize(expandedSize_);
     auto *outer = new QVBoxLayout(this);
     outer->setContentsMargins(0, 0, 0, 0);
+    // Mode-specific bounds below own the native window minimum, not stale layout hints.
+    outer->setSizeConstraint(QLayout::SetNoConstraint);
     auto *shell = new QFrame(this);
     shell->setObjectName("shell");
     outer->addWidget(shell);
@@ -634,19 +636,8 @@ void MainWindow::toggleCompact()
     header_->setFixedHeight(compact_ ? 32 : 38);
     if (compact_) {
         expandedSize_ = size();
-        body_->hide();
-        brand_->hide();
-        settingsButton_->hide();
         showSettings(false);
-        setMinimumSize(360, 44);
-        setMaximumHeight(44);
-        resize(360, 44);
-    } else {
-        setMaximumHeight(QWIDGETSIZE_MAX);
-        setMinimumSize(360, 220);
-        resize(expandedSize_);
     }
-    move(old.right() - width() + 1, old.top());
     body_->setVisible(!compact_);
     brand_->setVisible(!compact_);
     for (auto *handle : resizeHandles_)
@@ -655,6 +646,21 @@ void MainWindow::toggleCompact()
     dot_->setVisible(compact_);
     caption_->setVisible(compact_);
     compactRecord_->setVisible(compact_);
+    // Finish visibility/layout changes before publishing native size constraints.
+    // Windows can otherwise clamp the shrink against the expanded content's minimum.
+    shellLayout->invalidate();
+    shellLayout->activate();
+    layout()->invalidate();
+    layout()->activate();
+    if (compact_) {
+        setFixedHeight(44);
+        resize(360, 44);
+    } else {
+        setMaximumHeight(QWIDGETSIZE_MAX);
+        setMinimumSize(360, 220);
+        resize(expandedSize_);
+    }
+    move(old.right() - width() + 1, old.top());
     expandButton_->setToolTip(compact_ ? QStringLiteral("展开") : QStringLiteral("缩小"));
     expandButton_->setAccessibleName(expandButton_->toolTip());
     expandButton_->setProperty("iconName", compact_ ? "expand" : "collapse");
