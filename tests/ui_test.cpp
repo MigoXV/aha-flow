@@ -40,6 +40,7 @@
 #include <QTimer>
 #include <QSet>
 #include <QEventLoop>
+#include <QWindow>
 
 class UiTest final : public QObject
 {
@@ -368,6 +369,39 @@ class UiTest final : public QObject
                                                      {"preferredChineseAvailable", hasChinese},
                                                      {"controls", report}});
             QCOMPARE(output.write(document.toJson()), qint64(document.toJson().size()));
+        }
+    }
+    void compactHeightSurvivesPendingLayoutChanges()
+    {
+        for (const QString &theme : {QStringLiteral("vallum"), QStringLiteral("abyssus")}) {
+            aha::AppSettings settings;
+            settings.theme = theme;
+            aha::MainWindow window(settings, false);
+            window.show();
+            QTest::qWait(30);
+            window.resize(430, 360);
+            for (int i = 0; i < 4; ++i) {
+                const QRect expanded = window.geometry();
+                // Collapse before queued layout requests from new content are processed.
+                window.session()->transcriptChanged({QString::number(i), QString(200, QChar('W')), true, false, false, {}});
+                window.findChild<QToolButton *>("compactButton")->click();
+                QCOMPARE(window.height(), 44);
+                QCOMPARE(window.minimumHeight(), 44);
+                QCOMPARE(window.maximumHeight(), 44);
+                QTest::qWait(30);
+                QCOMPARE(window.height(), 44);
+                QCOMPARE(window.windowHandle()->size().height(), 44);
+                QCOMPARE(window.geometry().right(), expanded.right());
+                QCOMPARE(window.y(), expanded.y());
+                window.hide();
+                window.restoreWindow();
+                QTest::qWait(30);
+                QCOMPARE(window.height(), 44);
+                window.findChild<QToolButton *>("compactButton")->click();
+                QTest::qWait(30);
+                QCOMPARE(window.size(), expanded.size());
+                QCOMPARE(window.geometry().topRight(), expanded.topRight());
+            }
         }
     }
     void compactSettingsAndTranscript()
